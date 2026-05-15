@@ -28,6 +28,16 @@ jobs:
         env:
           CI: 1
 
+      - name: Bundle JavaScript into Android assets
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
       - name: Sign release with debug key
         run: |
           cat >> android/app/build.gradle << 'EOF'
