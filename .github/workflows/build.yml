@@ -1,0 +1,24 @@
+name: Build Android APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm install
+      - run: eas build --platform android --profile preview --non-interactive
+      - uses: actions/upload-artifact@v4
+        with:
+          name: svara-yoga-apk
+          path: '*.apk'
+          retention-days: 30
