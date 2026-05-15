@@ -13,14 +13,12 @@ jobs:
         with:
           node-version: 20
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
 
       - name: Install dependencies
         run: npm install
@@ -30,16 +28,24 @@ jobs:
         env:
           CI: 1
 
-      - name: Set Kotlin version
+      - name: Sign release with debug key
         run: |
-          sed -i 's/kotlinVersion = .*/kotlinVersion = "1.9.23"/' android/build.gradle || true
-          echo "kotlin_version=1.9.23" >> android/gradle.properties
+          cat >> android/app/build.gradle << 'EOF'
+
+          android {
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          EOF
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build APK
-        run: cd android && ./gradlew assembleDebug --no-daemon
+      - name: Build Release APK
+        run: cd android && ./gradlew assembleRelease --no-daemon
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
@@ -47,5 +53,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: svara-yoga-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: android/app/build/outputs/apk/release/*.apk
           retention-days: 30
