@@ -13,15 +13,34 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ocsike.svarayoga"
+      "bundleIdentifier": "com.ocsike.svarayoga",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Svara Yoga are nevoie de locație pentru a calcula orele corecte de respirație în funcție de răsărit.",
+        "NSLocationAlwaysUsageDescription": "Svara Yoga are nevoie de locație în fundal pentru notificări precise."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.ocsike.svarayoga"
+      "package": "com.ocsike.svarayoga",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "POST_NOTIFICATIONS"
+      ]
     },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysPermission": "Svara Yoga are nevoie de locație pentru acuratețea exercițiilor."
+        }
+      ],
+      "expo-notifications"
+    ],
     "extra": {
       "eas": {
         "projectId": "e1d05aad-f013-4df4-99fb-2e6e3d8ae160"
