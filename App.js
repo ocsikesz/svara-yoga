@@ -147,6 +147,23 @@ export default function App(){
 }
 
 // --- STILURI ---
-const hd=StyleSheet.create({header:{flexDirection:'row',alignItems:'center',backgroundColor:C.bgDeep,padding:14,borderBottomWidth:0.5,borderColor:C.borderFaint},om:{fontSize:24,color:C.gold,marginRight:10},center:{flex:1},title:{fontSize:15,fontWeight:'500',color:C.goldLight},subtitle:{fontSize:9,color:C.muted},right:{alignItems:'flex-end'},timeLabel:{fontSize:11,color:C.gold},sunLabel:{fontSize:9,color:C.muted}});
-const td=StyleSheet.create({card:{margin:16,backgroundColor:C.bgCard,borderRadius:14,borderWidth:1,padding:14},topRow:{flexDirection:'row',alignItems:'center',marginBottom:10},colorDot:{width:12,height:12,borderRadius:6,marginRight:10},name:{fontSize:15,color:C.goldLight},infoRow:{flexDirection:'row'},infoItem:{flex:1},infoLabel:{fontSize:9,color:C.muted},infoVal:{fontSize:11,fontWeight:'500'},desc:{fontSize:11,color:'#a08ab0',marginTop:10}});
-const s=StyleSheet.create({svaraCard:{margin:16,backgroundColor:C.bgCard,borderRadius:16,padding:16,alignItems:'center',borderWidth:0.5,borderColor:C.border},svaraLabel:{}});
+const s = StyleSheet.create({
+  svaraCard: { margin: 16, backgroundColor: C.bgCard, borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 0.5, borderColor: C.border },
+  svaraLabel: { fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 1 },
+  svaraName: { fontSize: 22, color: C.gold, fontWeight: '500', marginTop: 5 },
+  svaraSanskrit: { fontSize: 13, color: C.faint, marginTop: 2 },
+  badge: { marginTop: 10, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: C.purple, borderRadius: 20 },
+  badgeText: { color: C.gold, fontSize: 11 },
+  tattvaRow: { flexDirection: 'row', marginHorizontal: 16, gap: 5, marginBottom: 10 },
+  tattvaPill: { flex: 1, backgroundColor: C.bgCard, padding: 8, borderRadius: 10, alignItems: 'center', borderWidth: 0.5, borderColor: C.border },
+  tattvaPillActive: { borderColor: C.gold, backgroundColor: C.purple },
+  tattvaIcon: { fontSize: 16 },
+  tattvaName: { fontSize: 9, color: C.muted },
+  bottomNav: { flexDirection: 'row', backgroundColor: C.bgDeep, paddingBottom: 25, paddingTop: 10, borderTopWidth: 0.5, borderColor: C.borderFaint },
+  navItem: { flex: 1, alignItems: 'center' },
+  navIcon: { fontSize: 20 },
+  navLabel: { fontSize: 9, color: C.fainter },
+  screenTitle: { color: C.gold, fontSize: 18, textAlign: 'center', marginTop: 20 },
+  sectionLabel: { color: C.muted, fontSize: 12, marginBottom: 10 },
+  settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.bgCard, padding: 15, borderRadius: 10 }
+});
