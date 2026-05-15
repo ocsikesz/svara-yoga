@@ -30,11 +30,16 @@ jobs:
         env:
           CI: 1
 
+      - name: Set Kotlin version
+        run: |
+          sed -i 's/kotlinVersion = .*/kotlinVersion = "1.9.23"/' android/build.gradle || true
+          echo "kotlin_version=1.9.23" >> android/gradle.properties
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
       - name: Build APK
-        run: cd android && ./gradlew assembleDebug --no-daemon --warning-mode all --continue
+        run: cd android && ./gradlew assembleDebug --no-daemon
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
