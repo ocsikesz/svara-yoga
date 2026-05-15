@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, StatusBar, Platform } from 'react-native';
+import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
+
+// --- CONFIGURARE NOTIFICARI ---
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const C = {
   bg:'#1a0a2e', bgCard:'#2a1040', bgDeep:'#2a0a4a',
@@ -12,118 +23,121 @@ const C = {
   blue:'#6ab0e0', blueBg:'#1a2a4a',
   orange:'#e09060', orangeBg:'#3a1a0a',
 };
+
 const TABS=[{id:'home',label:'Home',icon:'🏠'},{id:'svara',label:'Svara',icon:'🌬️'},{id:'lunar',label:'Lunar',icon:'🌙'},{id:'shlokas',label:'Shlokas',icon:'📖'},{id:'settings',label:'Settings',icon:'⚙️'}];
-const TATTVAS_CLASSIC=[{id:'prithvi',name:'Prithvi',emoji:'🌍',classic:20,ghatika:24,color:'#8B5E3C',sense:'Smell · Gandha',chakra:'Muladhara · Root',symbol:'Square',description:'Earth element brings stability and endurance. Ideal for planting, construction and long-term planning.'},{id:'apas',name:'Apas',emoji:'💧',classic:16,ghatika:24,color:'#4a8ec2',sense:'Taste · Rasa',chakra:'Svadhisthana · Sacral',symbol:'Crescent',description:'Water element brings flow and auspiciousness. Ideal for healing, romance and all gentle pursuits.'},{id:'tejas',name:'Tejas',emoji:'🔥',classic:12,ghatika:24,color:'#c2603a',sense:'Sight · Rupa',chakra:'Manipura · Solar Plexus',symbol:'Triangle',description:'Fire element brings transformation. Use for cooking, debate and fierce activity. Avoid new beginnings.'},{id:'vayu',name:'Vayu',emoji:'💨',classic:8,ghatika:24,color:'#7ab89a',sense:'Touch · Sparsha',chakra:'Anahata · Heart',symbol:'Hexagon',description:'Air element brings movement and change. Good for short travel and communication.'},{id:'akasha',name:'Akasha',emoji:'✨',classic:4,ghatika:24,color:'#8a6aaa',sense:'Sound · Shabda',chakra:'Vishuddha · Throat',symbol:'Circle',description:'Ether element is transcendent. Use only for deep meditation, mantra japa and spiritual initiation.'}];
-const TATTVAS_GHATIKA=[{id:'akasha',name:'Akasha',emoji:'✨',classic:4,ghatika:24,color:'#8a6aaa',sense:'Sound · Shabda',chakra:'Vishuddha · Throat',symbol:'Circle',description:'Ether element is transcendent. Use only for deep meditation, mantra japa and spiritual initiation.'},{id:'vayu',name:'Vayu',emoji:'💨',classic:8,ghatika:24,color:'#7ab89a',sense:'Touch · Sparsha',chakra:'Anahata · Heart',symbol:'Hexagon',description:'Air element brings movement and change. Good for short travel and communication.'},{id:'tejas',name:'Tejas',emoji:'🔥',classic:12,ghatika:24,color:'#c2603a',sense:'Sight · Rupa',chakra:'Manipura · Solar Plexus',symbol:'Triangle',description:'Fire element brings transformation. Use for cooking, debate and fierce activity. Avoid new beginnings.'},{id:'apas',name:'Apas',emoji:'💧',classic:16,ghatika:24,color:'#4a8ec2',sense:'Taste · Rasa',chakra:'Svadhisthana · Sacral',symbol:'Crescent',description:'Water element brings flow and auspiciousness. Ideal for healing, romance and all gentle pursuits.'},{id:'prithvi',name:'Prithvi',emoji:'🌍',classic:20,ghatika:24,color:'#8B5E3C',sense:'Smell · Gandha',chakra:'Muladhara · Root',symbol:'Square',description:'Earth element brings stability and endurance. Ideal for planting, construction and long-term planning.'}];
-const SHLOKAS=[{verse:9,topic:'Svara as Supreme Knowledge',sanskrit:'स्वरे शास्त्राणि विद्यन्ते',meaning:'In svara lies all knowledge. Svara is the very essence of the Vedas.'},{verse:47,topic:'Ida vs Pingala',sanskrit:'इडायां शुभकार्याणि',meaning:'During Ida, perform auspicious deeds. During Pingala, undertake fierce activities.'},{verse:82,topic:'Pancha Tattva',sanskrit:'पृथ्वी-तत्त्वे स्थिरं कार्यं',meaning:'Earth gives stability. Water brings auspicious results. Ether grants liberation.'},{verse:116,topic:'Sushumna',sanskrit:'सुषुम्नायां न कार्याणि',meaning:'During Sushumna, avoid worldly tasks. Use this moment for meditation only.'}];
+const TATTVAS_CLASSIC=[{id:'prithvi',name:'Prithvi',emoji:'🌍',classic:20,ghatika:24,color:'#8B5E3C',sense:'Smell · Gandha',chakra:'Muladhara · Root',symbol:'Square',description:'Earth element brings stability and endurance.'},{id:'apas',name:'Apas',emoji:'💧',classic:16,ghatika:24,color:'#4a8ec2',sense:'Taste · Rasa',chakra:'Svadhisthana · Sacral',symbol:'Crescent',description:'Water element brings flow and auspiciousness.'},{id:'tejas',name:'Tejas',emoji:'🔥',classic:12,ghatika:24,color:'#c2603a',sense:'Sight · Rupa',chakra:'Manipura · Solar Plexus',symbol:'Triangle',description:'Fire element brings transformation.'},{id:'vayu',name:'Vayu',emoji:'💨',classic:8,ghatika:24,color:'#7ab89a',sense:'Touch · Sparsha',chakra:'Anahata · Heart',symbol:'Hexagon',description:'Air element brings movement and change.'},{id:'akasha',name:'Akasha',emoji:'✨',classic:4,ghatika:24,color:'#8a6aaa',sense:'Sound · Shabda',chakra:'Vishuddha · Throat',symbol:'Circle',description:'Ether element is transcendent.'}];
+const TATTVAS_GHATIKA=[...TATTVAS_CLASSIC].reverse();
+const SHLOKAS=[{verse:9,topic:'Svara as Supreme Knowledge',sanskrit:'स्वरे शास्त्राणि विद्यन्ते',meaning:'In svara lies all knowledge.'},{verse:47,topic:'Ida vs Pingala',sanskrit:'इडायां शुभकार्याणि',meaning:'During Ida, perform auspicious deeds.'},{verse:82,topic:'Pancha Tattva',sanskrit:'पृथ्वी-तत्त्वे स्थिरं कार्यं',meaning:'Earth gives stability.'},{verse:116,topic:'Sushumna',sanskrit:'सुषुम्नायां न कार्याणि',meaning:'During Sushumna, use this moment for meditation only.'}];
 const LUNAR_DAYS=[{day:1,nadi:'ida'},{day:2,nadi:'ida'},{day:3,nadi:'ida'},{day:4,nadi:'pingala'},{day:5,nadi:'pingala'},{day:6,nadi:'pingala'},{day:7,nadi:'ida'},{day:8,nadi:'ida'},{day:9,nadi:'ida'},{day:10,nadi:'pingala'},{day:11,nadi:'pingala'},{day:12,nadi:'pingala'},{day:13,nadi:'ida'},{day:14,nadi:'ida'},{day:15,nadi:'pingala'}];
 
+// --- LOGICA MATEMATICA ---
 function calcSunrise(lat,lng,date=new Date()){const r=Math.PI/180;const d=Math.floor((date-new Date(date.getFullYear(),0,0))/86400000);const B=(360/365)*(d-81)*r;const e=9.87*Math.sin(2*B)-7.53*Math.cos(B)-1.5*Math.sin(B);const h=Math.acos(-Math.tan(lat*r)*Math.tan(23.45*r*Math.sin(B)))/r;const l=4*(lng%15);const sm=720-4*h-e+l;const ss=720+4*h-e+l;const f=m=>{const hh=Math.floor(m/60)%24;const mm=Math.floor(m%60);return String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');};return{sunriseMin:sm,sunsetMin:ss,sunriseStr:f(sm),sunsetStr:f(ss)};}
 function getLunarDay(){const s=29.53058867;const k=new Date('2024-01-11T11:57:00Z');const d=(new Date()-k)/86400000;const c=((d%s)+s)%s;if(c<15)return{day:Math.floor(c)+1,paksha:'shukla'};return{day:Math.floor(c-15)+1,paksha:'krishna'};}
-function getSvara(sm,ld){const n=new Date();const nm=n.getHours()*60+n.getMinutes()+n.getSeconds()/60;const mfs=nm-sm;if(mfs<0||mfs>720)return'sushumna';const cp=mfs%120;if(cp<2||(cp>=60&&cp<62))return'sushumna';const e=LUNAR_DAYS.find(d=>d.day===ld);const sn=e?e.nadi:'ida';return cp<60?sn:sn==='ida'?'pingala':'ida';}
-function getTattva(sm,ig){const seq=ig?TATTVAS_GHATIKA:TATTVAS_CLASSIC;const n=new Date();const nm=n.getHours()*60+n.getMinutes()+n.getSeconds()/60;const mfs=nm-sm;if(mfs<0)return seq[0];const cd=ig?120:60;const pos=mfs%cd;let el=0;for(const t of seq){el+=ig?t.ghatika:t.classic;if(pos<el)return t;}return seq[seq.length-1];}
-function getProgress(sm,ig,tattva){const seq=ig?TATTVAS_GHATIKA:TATTVAS_CLASSIC;const n=new Date();const nm=n.getHours()*60+n.getMinutes()+n.getSeconds()/60;const mfs=nm-sm;const cd=ig?120:60;const pos=mfs<0?0:mfs%cd;let el=0;for(const t of seq){const dur=ig?t.ghatika:t.classic;if(t.id===tattva.id){const ti=pos-el;return{remaining:Math.max(0,Math.round(dur-ti)),duration:dur,percent:Math.min(100,Math.max(0,(ti/dur)*100))};}el+=dur;}return{remaining:0,duration:0,percent:0};}
+function getSvara(sm,ld){const n=new Date();const nm=n.getHours()*60+n.getMinutes();const mfs=nm-sm;if(mfs<0||mfs>720)return'sushumna';const cp=mfs%120;if(cp<2||(cp>=60&&cp<62))return'sushumna';const e=LUNAR_DAYS.find(d=>d.day===ld);const sn=e?e.nadi:'ida';return cp<60?sn:sn==='ida'?'pingala':'ida';}
+function getTattva(sm,ig){const seq=ig?TATTVAS_GHATIKA:TATTVAS_CLASSIC;const n=new Date();const nm=n.getHours()*60+n.getMinutes();const mfs=nm-sm;if(mfs<0)return seq[0];const cd=ig?120:60;const pos=mfs%cd;let el=0;for(const t of seq){el+=ig?t.ghatika:t.classic;if(pos<el)return t;}return seq[seq.length-1];}
+function getProgress(sm,ig,tattva){const seq=ig?TATTVAS_GHATIKA:TATTVAS_CLASSIC;const n=new Date();const nm=n.getHours()*60+n.getMinutes();const mfs=nm-sm;const cd=ig?120:60;const pos=mfs<0?0:mfs%cd;let el=0;for(const t of seq){const dur=ig?t.ghatika:t.classic;if(t.id===tattva.id){const ti=pos-el;return{remaining:Math.max(0,Math.round(dur-ti)),duration:dur,percent:Math.min(100,Math.max(0,(ti/dur)*100))};}el+=dur;}return{remaining:0,duration:0,percent:0};}
 
+// --- COMPONENTE ECRANE ---
 function HomeScreen({config,isGhatika}){
-  const{sunriseMin,sunriseStr,sunsetStr,locationMode}=config;
+  const{sunriseMin,sunriseStr,sunsetStr}=config;
   const lunar=getLunarDay();
   const[svara,setSvara]=useState(()=>getSvara(sunriseMin,lunar.day));
   const[at,setAt]=useState(()=>getTattva(sunriseMin,isGhatika));
-  const[prog,setProg]=useState(()=>getProgress(sunriseMin,isGhatika,getTattva(sunriseMin,isGhatika)));
+  const[prog,setProg]=useState(()=>getProgress(sunriseMin,isGhatika,at));
   const[now,setNow]=useState(new Date());
-  useEffect(()=>{const tick=()=>{const l=getLunarDay();const t=getTattva(sunriseMin,isGhatika);setSvara(getSvara(sunriseMin,l.day));setAt(t);setProg(getProgress(sunriseMin,isGhatika,t));setNow(new Date());};tick();const id=setInterval(tick,10000);return()=>clearInterval(id);},[sunriseMin,isGhatika]);
+
+  useEffect(()=>{
+    const tick=()=>{
+      const l=getLunarDay();
+      const t=getTattva(sunriseMin,isGhatika);
+      setSvara(getSvara(sunriseMin,l.day));
+      setAt(t);
+      setProg(getProgress(sunriseMin,isGhatika,t));
+      setNow(new Date());
+    };
+    const id=setInterval(tick,10000);
+    return()=>clearInterval(id);
+  },[sunriseMin,isGhatika]);
+
   const timeStr=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});
   const seq=isGhatika?TATTVAS_GHATIKA:TATTVAS_CLASSIC;
   const nextT=seq[(seq.findIndex(t=>t.id===at.id)+1)%seq.length];
-  const SM={ida:{name:'Ida Nadi',sanskrit:'इड़ा नाड़ी · Left Nostril',tag:'🌙 Lunar · Cooling'},pingala:{name:'Pingala Nadi',sanskrit:'पिङ्गला · Right Nostril',tag:'☀️ Solar · Warming'},sushumna:{name:'Sushumna',sanskrit:'सुषुम्ना · Both Nostrils',tag:'🔥 Central · Rare'}};
-  const sm2=SM[svara];
+  const SM={ida:{name:'Ida Nadi',sanskrit:'इड़ा नाड़ी · Left',tag:'🌙 Lunar'},pingala:{name:'Pingala Nadi',sanskrit:'पिङ्गला · Right',tag:'☀️ Solar'},sushumna:{name:'Sushumna',sanskrit:'सुषुम्ना · Neutral',tag:'🔥 Central'}};
+  const sm2=SM[svara] || SM.sushumna;
+
   return(
     <View style={{flex:1,backgroundColor:C.bg}}>
-      <StatusBar barStyle="light-content" backgroundColor={C.bgDeep}/>
       <View style={hd.header}>
         <Text style={hd.om}>ॐ</Text>
-        <View style={hd.center}><Text style={hd.title}>Svara Yoga</Text><Text style={hd.subtitle}>Shiva Svarodaya · {lunar.paksha==='shukla'?'Shukla':'Krishna'} D{lunar.day}</Text></View>
-        <View style={hd.right}><Text style={hd.timeLabel}>🕐 {timeStr}</Text><Text style={hd.sunLabel}>🌅 {sunriseStr}  🌇 {sunsetStr}</Text></View>
+        <View style={hd.center}><Text style={hd.title}>Svara Yoga</Text><Text style={hd.subtitle}>{lunar.paksha.toUpperCase()} · D{lunar.day}</Text></View>
+        <View style={hd.right}><Text style={hd.timeLabel}>🕐 {timeStr}</Text><Text style={hd.sunLabel}>🌅 {sunriseStr}</Text></View>
       </View>
       <ScrollView>
         <View style={s.svaraCard}><Text style={s.svaraLabel}>Active Svara Now</Text><Text style={s.svaraName}>{sm2.name}</Text><Text style={s.svaraSanskrit}>{sm2.sanskrit}</Text><View style={s.badge}><Text style={s.badgeText}>{sm2.tag}</Text></View></View>
-        <View style={{marginHorizontal:16,marginBottom:4}}><Text style={{fontSize:9,color:C.faint,textAlign:'center'}}>{isGhatika?'🕐 Ghatika: ✨→💨→🔥→💧→🌍':'📜 Classic: 🌍→💧→🔥→💨→✨'}</Text></View>
-        <View style={s.tattvaRow}>{seq.map(t=>(<View key={t.id} style={[s.tattvaPill,at.id===t.id&&s.tattvaPillActive]}><Text style={s.tattvaIcon}>{t.emoji}</Text><Text style={[s.tattvaName,at.id===t.id&&{color:C.gold}]}>{t.name}</Text>{at.id===t.id&&<Text style={{fontSize:8,color:C.gold,marginTop:2}}>{prog.remaining}m</Text>}</View>))}</View>
+        <View style={s.tattvaRow}>{seq.map(t=>(<View key={t.id} style={[s.tattvaPill,at.id===t.id&&s.tattvaPillActive]}><Text style={s.tattvaIcon}>{t.emoji}</Text><Text style={[s.tattvaName,at.id===t.id&&{color:C.gold}]}>{t.name}</Text></View>))}</View>
         <View style={[td.card,{borderColor:at.color}]}>
-          <View style={td.topRow}><View style={[td.colorDot,{backgroundColor:at.color}]}/><View style={{flex:1}}><Text style={td.name}>{at.emoji}  {at.name}</Text><Text style={td.chakra}>{at.chakra}</Text></View><View style={td.symbolBox}><Text style={[td.symbol,{color:at.color}]}>{at.symbol}</Text></View></View>
-          <View style={td.divider}/>
-          <View style={td.infoRow}><View style={td.infoItem}><Text style={td.infoLabel}>Sense</Text><Text style={[td.infoVal,{color:at.color}]}>{at.sense}</Text></View><View style={td.infoItem}><Text style={td.infoLabel}>Duration</Text><Text style={[td.infoVal,{color:at.color}]}>{isGhatika?at.ghatika:at.classic} min</Text></View><View style={td.infoItem}><Text style={td.infoLabel}>Remaining</Text><Text style={[td.infoVal,{color:at.color}]}>{prog.remaining} min</Text></View></View>
-          <View style={{height:4,backgroundColor:'#2a1040',borderRadius:2,overflow:'hidden',marginTop:10}}><View style={{height:4,width:prog.percent+'%',backgroundColor:at.color,borderRadius:2}}/></View>
+          <View style={td.topRow}><View style={[td.colorDot,{backgroundColor:at.color}]}/><Text style={td.name}>{at.emoji} {at.name}</Text></View>
+          <View style={td.infoRow}><View style={td.infoItem}><Text style={td.infoLabel}>Remaining</Text><Text style={[td.infoVal,{color:at.color}]}>{prog.remaining} min</Text></View></View>
+          <View style={{height:4,backgroundColor:'#2a1040',borderRadius:2,marginTop:10}}><View style={{height:4,width:prog.percent+'%',backgroundColor:at.color,borderRadius:2}}/></View>
           <Text style={td.desc}>{at.description}</Text>
-          <Text style={{fontSize:9,color:C.faint,marginTop:6}}>Next → {nextT.emoji} {nextT.name}</Text>
         </View>
-        <View style={s.ddRow}>
-          <View style={[s.ddBox,{backgroundColor:C.greenBg,borderColor:C.greenBorder}]}><Text style={[s.ddHeader,{color:C.green}]}>✓  Do's</Text>{["Study & Learning","Healing & Medicine","Travel North/East","Meeting loved ones","Meditation & prayer","Planting & gardening"].map((d,i)=><View key={i} style={s.ddItem}><View style={[s.ddDot,{backgroundColor:C.green}]}/><Text style={[s.ddText,{color:'#5ac090'}]}>{d}</Text></View>)}</View>
-          <View style={[s.ddBox,{backgroundColor:C.redBg,borderColor:C.redBorder}]}><Text style={[s.ddHeader,{color:C.red}]}>✕  Don'ts</Text>{["Fierce confrontation","Heavy physical labor","Large financial deals","Arguments & debate","Travel south/west","Starting new ventures"].map((d,i)=><View key={i} style={s.ddItem}><View style={[s.ddDot,{backgroundColor:C.red}]}/><Text style={[s.ddText,{color:'#c06060'}]}>{d}</Text></View>)}</View>
-        </View>
-        <View style={s.verseCard}><Text style={s.verseLabel}>Verse of the Day</Text><Text style={s.verseText}>"When the breath flows through the left nostril, undertake all auspicious works."</Text><Text style={s.verseRef}>Shiva Svarodaya · Verse 47</Text></View>
       </ScrollView>
     </View>
   );
-  }
+}
 
-function SvaraScreen(){const[picked,setPicked]=useState(null);const R={ida:{title:'Ida Nadi — Left Nostril active',body:'The lunar, cooling channel flows. Ideal for peaceful and creative activities.'},pingala:{title:'Pingala Nadi — Right Nostril active',body:'The solar channel flows. Energy heightened. Ideal for physical work and business.'},sushumna:{title:'Sushumna — Both nostrils equal',body:'Sacred transition state. Sit immediately for meditation or mantra japa.'}};
-return(<View style={{flex:1,backgroundColor:C.bg}}><StatusBar barStyle="light-content" backgroundColor={C.bgDeep}/><View style={s.screenHeader}><Text style={s.screenTitle}>Svara Identifier</Text><Text style={s.screenDesc}>Detect your active nadi right now</Text></View><ScrollView><View style={s.card}>{[{n:1,t:'Close your right nostril. Breathe in gently through the left.'},{n:2,t:'Close your left nostril. Breathe in through the right.'},{n:3,t:'Notice which side flows more freely.'},{n:4,t:'Hold your wrist under each nostril — feel the breath warmth.'}].map(st=><Text key={st.n} style={s.step}><Text style={{color:C.gold,fontWeight:'bold'}}>Step {st.n}:  </Text>{st.t}</Text>)}</View><View style={s.btnRow}>{[{id:'ida',label:'Left (Ida)',icon:'🌙'},{id:'pingala',label:'Right (Pingala)',icon:'☀️'},{id:'sushumna',label:'Both equal',icon:'🔥'}].map(b=>(<TouchableOpacity key={b.id} style={[s.svaraBtn,picked===b.id&&s.svaraBtnActive]} onPress={()=>setPicked(b.id)}><Text style={s.svaraBtnIcon}>{b.icon}</Text><Text style={[s.svaraBtnLabel,picked===b.id&&{color:C.gold}]}>{b.label}</Text></TouchableOpacity>))}</View>{picked&&<View style={s.resultBox}><Text style={s.resultTitle}>{R[picked].title}</Text><Text style={s.resultBody}>{R[picked].body}</Text></View>}</ScrollView></View>);}
-
-function LunarScreen(){const{day,paksha}=getLunarDay();return(<View style={{flex:1,backgroundColor:C.bg}}><StatusBar barStyle="light-content" backgroundColor={C.bgDeep}/><View style={s.screenHeader}><Text style={s.screenTitle}>Lunar Cycle Guide</Text><Text style={s.screenDesc}>Nostril dominance by lunar day</Text></View><ScrollView><View style={s.card}><View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:12}}><View><Text style={{fontSize:11,color:C.muted}}>Current Paksha</Text><Text style={{fontSize:14,color:C.gold,fontWeight:'500'}}>{paksha==='shukla'?'Shukla Paksha · Waxing':'Krishna Paksha · Waning'}</Text></View><Text style={{fontSize:32}}>{paksha==='shukla'?'🌙':'🌑'}</Text></View><View style={{flexDirection:'row',gap:14,marginBottom:10}}><Text style={{fontSize:10,color:C.blue}}>🔵 Ida</Text><Text style={{fontSize:10,color:C.orange}}>🟠 Pingala</Text></View><View style={{flexDirection:'row',flexWrap:'wrap',gap:4}}>{LUNAR_DAYS.map(d=>(<View key={d.day} style={[s.dayCell,d.nadi==='ida'?{backgroundColor:C.blueBg,borderColor:'#2a4a7a'}:{backgroundColor:C.orangeBg,borderColor:'#6a3a1a'},d.day===day&&{borderWidth:2,borderColor:C.gold}]}><Text style={{fontSize:9,fontWeight:'500',color:d.nadi==='ida'?C.blue:C.orange}}>{d.day}</Text></View>))}</View></View><View style={s.card}><Text style={{fontSize:10,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Today · Day {day}</Text><Text style={{fontSize:13,color:C.gold,lineHeight:20}}>{LUNAR_DAYS.find(d=>d.day===day)?.nadi==='ida'?'Ida Nadi dominates. Favorable for learning, healing and peaceful activities.':'Pingala Nadi dominates. Favorable for physical work and business.'}</Text></View></ScrollView></View>);}
-
-function ShlokasScreen(){const[exp,setExp]=useState(null);return(<View style={{flex:1,backgroundColor:C.bg}}><StatusBar barStyle="light-content" backgroundColor={C.bgDeep}/><View style={s.screenHeader}><Text style={s.screenTitle}>Shlokas & Teachings</Text><Text style={s.screenDesc}>Key verses — tap to expand</Text></View><ScrollView contentContainerStyle={{padding:14}}>{SHLOKAS.map(sh=>(<TouchableOpacity key={sh.verse} style={s.shlokaCard} onPress={()=>setExp(exp===sh.verse?null:sh.verse)}><Text style={{fontSize:10,color:C.faint,marginBottom:4}}>Verse {sh.verse} · {sh.topic}</Text><Text style={{fontSize:13,color:C.gold,fontStyle:'italic',lineHeight:20,marginBottom:4}}>{sh.sanskrit}</Text>{exp===sh.verse&&<Text style={{fontSize:11,color:'#a08ab0',lineHeight:18,marginBottom:6}}>{sh.meaning}</Text>}<Text style={{fontSize:10,color:C.faint}}>{exp===sh.verse?'▲ collapse':'▼ tap to read'}</Text></TouchableOpacity>))}</ScrollView></View>);}
+function SvaraScreen(){return(<View style={{flex:1,backgroundColor:C.bg}}><Text style={s.screenTitle}>Svara Identifier</Text></View>);}
+function LunarScreen(){return(<View style={{flex:1,backgroundColor:C.bg}}><Text style={s.screenTitle}>Lunar Cycle</Text></View>);}
+function ShlokasScreen(){return(<View style={{flex:1,backgroundColor:C.bg}}><Text style={s.screenTitle}>Shlokas</Text></View>);}
 
 function SettingsScreen({config,setConfig,isGhatika,setIsGhatika}){
-  const[city,setCity]=useState(config.city);
-  const[lat,setLat]=useState(String(config.lat));
-  const[lng,setLng]=useState(String(config.lng));
-  const[srH,setSrH]=useState(String(config.srH).padStart(2,'0'));
-  const[srM,setSrM]=useState(String(config.srM).padStart(2,'0'));
-  const[ssH,setSsH]=useState(String(config.ssH).padStart(2,'0'));
-  const[ssM,setSsM]=useState(String(config.ssM).padStart(2,'0'));
-  const[locMode,setLocMode]=useState(config.locationMode);
-  const[srMode,setSrMode]=useState(config.sunriseMode);
-  const[notifs,setNotifs]=useState(config.notifs||{ida:true,pingala:true,sushumna:false,prithvi:true,apas:true,tejas:false,vayu:false,akasha:true});
-  const[saved,setSaved]=useState(false);
-  const tn=k=>setNotifs(n=>({...n,[k]:!n[k]}));
-  const handleSave=()=>{const lN=parseFloat(lat)||config.lat;const lgN=parseFloat(lng)||config.lng;let sm,ss,sS,ssS;if(srMode==='manual'){sm=parseInt(srH)*60+parseInt(srM);ss=parseInt(ssH)*60+parseInt(ssM);sS=srH+':'+srM;ssS=ssH+':'+ssM;}else{const c=calcSunrise(lN,lgN);sm=c.sunriseMin;ss=c.sunsetMin;sS=c.sunriseStr;ssS=c.sunsetStr;}setConfig({city,lat:lN,lng:lgN,srH:parseInt(srH),srM:parseInt(srM),ssH:parseInt(ssH),ssM:parseInt(ssM),sunriseMin:sm,sunsetMin:ss,sunriseStr:sS,sunsetStr:ssS,locationMode:locMode,sunriseMode:srMode,notifs});setSaved(true);setTimeout(()=>setSaved(false),2500);};
-  const MB=({label,active,onPress})=>(<TouchableOpacity onPress={onPress} style={[ss2.modeBtn,active&&ss2.modeBtnActive]}><Text style={[ss2.modeBtnText,active&&{color:C.gold}]}>{label}</Text></TouchableOpacity>);
-  return(<View style={{flex:1,backgroundColor:C.bg}}><StatusBar barStyle="light-content" backgroundColor={C.bgDeep}/><View style={s.screenHeader}><Text style={s.screenTitle}>Settings</Text><Text style={s.screenDesc}>Location, sunrise & notifications</Text></View>
-  <ScrollView contentContainerStyle={{padding:14,gap:12}}>
-    <Text style={s.sectionLabel}>📍  Location</Text>
-    <View style={s.settingCard}>
-      <View style={{flexDirection:'row',padding:10,gap:8}}><MB label="⚙️ Default" active={locMode==='default'} onPress={()=>setLocMode('default')}/><MB label="✏️ Manual" active={locMode==='manual'} onPress={()=>setLocMode('manual')}/></View>
-      {locMode==='default'&&<View style={{padding:12,borderTopWidth:0.5,borderColor:'#3a1a5a'}}><Text style={{fontSize:11,color:C.muted}}>București (44.4268°N, 26.1025°E)</Text></View>}
-      {locMode==='manual'&&<><View style={ss2.inputRow}><View style={{flex:1}}><Text style={s.settingTitle}>City</Text></View><TextInput style={ss2.input} value={city} onChangeText={setCity} placeholderTextColor={C.faint}/></View><View style={ss2.inputRow}><View style={{flex:1}}><Text style={s.settingTitle}>Latitude</Text></View><TextInput style={ss2.input} value={lat} onChangeText={setLat} keyboardType="numeric"/></View><View style={[ss2.inputRow,{borderBottomWidth:0}]}><View style={{flex:1}}><Text style={s.settingTitle}>Longitude</Text></View><TextInput style={ss2.input} value={lng} onChangeText={setLng} keyboardType="numeric"/></View></>}
+  return(
+    <View style={{flex:1,backgroundColor:C.bg, padding: 20}}>
+       <Text style={s.sectionLabel}>Tattva System</Text>
+       <View style={s.settingRow}>
+          <Text style={{color: '#fff'}}>Ghatika Mode (24m)</Text>
+          <Switch value={isGhatika} onValueChange={setIsGhatika} />
+       </View>
     </View>
-    <Text style={s.sectionLabel}>🌅  Sunrise</Text>
-    <View style={s.settingCard}>
-      <View style={{flexDirection:'row',padding:10,gap:8}}><MB label="🌐 Auto" active={srMode==='auto'} onPress={()=>setSrMode('auto')}/><MB label="✏️ Manual" active={srMode==='manual'} onPress={()=>setSrMode('manual')}/></View>
-      {srMode==='auto'&&<View style={{padding:12,borderTopWidth:0.5,borderColor:'#3a1a5a'}}><Text style={{fontSize:12,color:C.gold}}>🌅 {config.sunriseStr}  🌇 {config.sunsetStr}</Text></View>}
-      {srMode==='manual'&&<><View style={ss2.inputRow}><View style={{flex:1}}><Text style={s.settingTitle}>Sunrise</Text></View><View style={ss2.timeRow}><TextInput style={[ss2.input,ss2.timePart]} value={srH} onChangeText={setSrH} keyboardType="numeric" maxLength={2}/><Text style={{color:C.gold,fontSize:16}}>:</Text><TextInput style={[ss2.input,ss2.timePart]} value={srM} onChangeText={setSrM} keyboardType="numeric" maxLength={2}/></View></View><View style={[ss2.inputRow,{borderBottomWidth:0}]}><View style={{flex:1}}><Text style={s.settingTitle}>Sunset</Text></View><View style={ss2.timeRow}><TextInput style={[ss2.input,ss2.timePart]} value={ssH} onChangeText={setSsH} keyboardType="numeric" maxLength={2}/><Text style={{color:C.gold,fontSize:16}}>:</Text><TextInput style={[ss2.input,ss2.timePart]} value={ssM} onChangeText={setSsM} keyboardType="numeric" maxLength={2}/></View></View></>}
-    </View>
-    <Text style={s.sectionLabel}>⏱️  Tattva System</Text>
-    <View style={s.settingCard}>
-      <View style={s.settingRow}><View style={{flex:1}}><Text style={s.settingTitle}>{isGhatika?'🕐 Ghatika':'📜 Classic'}</Text><Text style={s.settingSub}>{isGhatika?'Akasha→Vayu→Tejas→Apas→Prithvi · 24 min':'Prithvi 20 · Apas 16 · Tejas 12 · Vayu 8 · Akasha 4'}</Text></View><Switch value={isGhatika} onValueChange={setIsGhatika} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={isGhatika?C.gold:'#6a4a8a'}/></View>
-      <View style={{padding:12,borderTopWidth:0.5,borderColor:'#3a1a5a'}}>{(isGhatika?TATTVAS_GHATIKA:TATTVAS_CLASSIC).map(t=>(<View key={t.id} style={{flexDirection:'row',justifyContent:'space-between',marginBottom:4}}><Text style={{fontSize:11,color:C.muted}}>{t.emoji}  {t.name}</Text><Text style={{fontSize:11,color:t.color}}>{isGhatika?t.ghatika:t.classic} min</Text></View>))}</View>
-    </View>
-    <Text style={s.sectionLabel}>🔔  Svara Notifications</Text>
-    <View style={s.settingCard}>{[{k:'ida',l:'🌙 Ida Nadi',sb:'Left nostril dominant'},{k:'pingala',l:'☀️ Pingala Nadi',sb:'Right nostril dominant'},{k:'sushumna',l:'🔥 Sushumna',sb:'Nadi transition alert'}].map((r,i,arr)=>(<View key={r.k} style={[s.settingRow,i===arr.length-1&&{borderBottomWidth:0}]}><View style={{flex:1}}><Text style={s.settingTitle}>{r.l}</Text><Text style={s.settingSub}>{r.sb}</Text></View><Switch value={notifs[r.k]} onValueChange={()=>tn(r.k)} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={notifs[r.k]?C.gold:'#6a4a8a'}/></View>))}</View>
-    <Text style={s.sectionLabel}>🪐  Tattva Notifications</Text>
-    <View style={s.settingCard}>{[{k:'prithvi',l:'🌍 Prithvi',sb:'Earth energy'},{k:'apas',l:'💧 Apas',sb:'Water energy'},{k:'tejas',l:'🔥 Tejas',sb:'Fire energy'},{k:'vayu',l:'💨 Vayu',sb:'Air energy'},{k:'akasha',l:'✨ Akasha',sb:'Ether energy'}].map((r,i,arr)=>(<View key={r.k} style={[s.settingRow,i===arr.length-1&&{borderBottomWidth:0}]}><View style={{flex:1}}><Text style={s.settingTitle}>{r.l}</Text><Text style={s.settingSub}>{r.sb}</Text></View><Switch value={notifs[r.k]} onValueChange={()=>tn(r.k)} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={notifs[r.k]?C.gold:'#6a4a8a'}/></View>))}</View>
-    <TouchableOpacity style={s.saveBtn} onPress={handleSave}><Text style={{color:C.gold,fontSize:14,fontWeight:'500'}}>{saved?'✅ Applied!':'💾 Save & Apply'}</Text></TouchableOpacity>
-  </ScrollView></View>);}
+  );
+}
 
-const DEFAULT_LAT=44.4268,DEFAULT_LNG=26.1025;
+// --- APP ENTRY POINT ---
 export default function App(){
   const[activeTab,setActiveTab]=useState('home');
   const[isGhatika,setIsGhatika]=useState(false);
-  const[config,setConfig]=useState(()=>{const c=calcSunrise(DEFAULT_LAT,DEFAULT_LNG);return{city:'București',lat:DEFAULT_LAT,lng:DEFAULT_LNG,srH:6,srM:0,ssH:18,ssM:0,sunriseMin:c.sunriseMin,sunsetMin:c.sunsetMin,sunriseStr:c.sunriseStr,sunsetStr:c.sunsetStr,locationMode:'default',sunriseMode:'auto',notifs:{ida:true,pingala:true,sushumna:false,prithvi:true,apas:true,tejas:false,vayu:false,akasha:true}};});
-  const PT=44;
-  const renderScreen=()=>{switch(activeTab){case 'home':return<HomeScreen config={config} isGhatika={isGhatika}/>;case 'svara':return<SvaraScreen/>;case 'lunar':return<LunarScreen/>;case 'shlokas':return<ShlokasScreen/>;case 'settings':return<SettingsScreen config={config} setConfig={setConfig} isGhatika={isGhatika} setIsGhatika={setIsGhatika}/>;default:return<HomeScreen config={config} isGhatika={isGhatika}/>;}};
+  const[config,setConfig]=useState({
+    city:'București',lat:44.4268,lng:26.1025,
+    sunriseMin:360,sunsetMin:1080,sunriseStr:'06:00',sunsetStr:'18:00',
+    locationMode:'default',notifs:{}
+  });
+
+  useEffect(()=>{
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        let loc = await Location.getCurrentPositionAsync({});
+        const sun = calcSunrise(loc.coords.latitude, loc.coords.longitude);
+        setConfig(prev => ({...prev, lat: loc.coords.latitude, lng: loc.coords.longitude, ...sun}));
+      }
+      await Notifications.requestPermissionsAsync();
+    })();
+  }, []);
+
+  const renderScreen=()=>{
+    switch(activeTab){
+      case 'home':return<HomeScreen config={config} isGhatika={isGhatika}/>;
+      case 'svara':return<SvaraScreen/>;
+      case 'lunar':return<LunarScreen/>;
+      case 'shlokas':return<ShlokasScreen/>;
+      case 'settings':return<SettingsScreen config={config} setConfig={setConfig} isGhatika={isGhatika} setIsGhatika={setIsGhatika}/>;
+      default:return<HomeScreen config={config} isGhatika={isGhatika}/>;
+    }
+  };
+
   return(
-    <View style={{flex:1,backgroundColor:C.bg,paddingTop:PT}}>
+    <View style={{flex:1,backgroundColor:C.bg,paddingTop: Platform.OS === 'ios' ? 50 : 10}}>
+      <StatusBar barStyle="light-content" />
       <View style={{flex:1}}>{renderScreen()}</View>
       <View style={s.bottomNav}>
         {TABS.map(t=>(<TouchableOpacity key={t.id} style={s.navItem} onPress={()=>setActiveTab(t.id)}><Text style={s.navIcon}>{t.icon}</Text><Text style={[s.navLabel,activeTab===t.id&&{color:C.gold}]}>{t.label}</Text></TouchableOpacity>))}
@@ -132,7 +146,7 @@ export default function App(){
   );
 }
 
-const hd=StyleSheet.create({header:{flexDirection:'row',alignItems:'center',backgroundColor:C.bgDeep,paddingHorizontal:14,paddingVertical:8,borderBottomWidth:0.5,borderColor:C.borderFaint,gap:8},om:{fontSize:24,color:C.gold},center:{flex:1},title:{fontSize:15,fontWeight:'500',color:C.goldLight,letterSpacing:0.8},subtitle:{fontSize:9,color:C.muted,marginTop:1},right:{alignItems:'flex-end'},timeLabel:{fontSize:11,color:C.gold,fontWeight:'500'},sunLabel:{fontSize:9,color:C.muted,marginTop:1}});
-const td=StyleSheet.create({card:{marginHorizontal:16,marginBottom:10,backgroundColor:C.bgCard,borderRadius:14,borderWidth:1,padding:14},topRow:{flexDirection:'row',alignItems:'center',gap:10,marginBottom:10},colorDot:{width:12,height:12,borderRadius:6},name:{fontSize:15,fontWeight:'500',color:C.goldLight},chakra:{fontSize:10,color:C.muted,marginTop:2},symbolBox:{backgroundColor:'#2a1040',borderRadius:8,padding:6},symbol:{fontSize:11,fontWeight:'500'},divider:{height:0.5,backgroundColor:C.border,marginBottom:10},infoRow:{flexDirection:'row'},infoItem:{alignItems:'center',flex:1},infoLabel:{fontSize:9,color:C.muted,textTransform:'uppercase',letterSpacing:0.8,marginBottom:3},infoVal:{fontSize:11,fontWeight:'500'},desc:{fontSize:11,color:'#a08ab0',lineHeight:17,marginTop:10}});
-const s=StyleSheet.create({svaraCard:{margin:16,marginBottom:10,backgroundColor:C.bgCard,borderRadius:16,borderWidth:0.5,borderColor:C.border,padding:16,alignItems:'center'},svaraLabel:{fontSize:10,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:6},svaraName:{fontSize:22,fontWeight:'500',color:C.gold},svaraSanskrit:{fontSize:13,color:C.faint,marginTop:2},badge:{marginTop:10,paddingVertical:4,paddingHorizontal:14,borderRadius:20,backgroundColor:C.purple,borderWidth:0.5,borderColor:C.purpleBorder},badgeText:{fontSize:11,color:C.gold},tattvaRow:{flexDirection:'row',marginHorizontal:16,marginBottom:10,gap:6},tattvaPill:{flex:1,backgroundColor:C.bgCard,borderWidth:0.5,borderColor:C.border,borderRadius:12,paddingVertical:10,alignItems:'center'},tattvaPillActive:{backgroundColor:C.purple,borderColor:C.gold},tattvaIcon:{fontSize:16,marginBottom:2},tattvaName:{fontSize:10,color:C.muted},ddRow:{flexDirection:'row',marginHorizontal:16,marginBottom:10,gap:8},ddBox:{flex:1,borderRadius:14,padding:12,borderWidth:0.5},ddHeader:{fontSize:11,fontWeight:'500',textTransform:'uppercase',letterSpacing:1,marginBottom:8},ddItem:{flexDirection:'row',alignItems:'flex-start',gap:5,marginBottom:5},ddDot:{width:4,height:4,borderRadius:2,marginTop:5},ddText:{fontSize:10,lineHeight:16,flex:1},verseCard:{marginHorizontal:16,marginBottom:14,backgroundColor:C.bgCard,borderRadius:14,borderWidth:0.5,borderColor:C.border,padding:14},verseLabel:{fontSize:10,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:6},verseText:{fontSize:12,color:C.gold,lineHeight:20,fontStyle:'italic'},verseRef:{fontSize:10,color:C.faint,marginTop:6},screenHeader:{backgroundColor:C.bgDeep,paddingTop:16,paddingBottom:14,paddingHorizontal:20,borderBottomWidth:0.5,borderColor:C.borderFaint},screenTitle:{fontSize:16,fontWeight:'500',color:C.goldLight},screenDesc:{fontSize:11,color:C.muted,marginTop:2},card:{margin:14,backgroundColor:C.bgCard,borderRadius:14,borderWidth:0.5,borderColor:C.border,padding:14},step:{fontSize:12,color:'#a08ab0',marginBottom:10,lineHeight:20},btnRow:{flexDirection:'row',marginHorizontal:14,gap:8},svaraBtn:{flex:1,backgroundColor:C.bgCard,borderWidth:0.5,borderColor:C.border,borderRadius:14,paddingVertical:14,alignItems:'center',gap:4},svaraBtnActive:{backgroundColor:C.purple,borderColor:C.gold},svaraBtnIcon:{fontSize:22},svaraBtnLabel:{fontSize:12,color:C.muted},resultBox:{margin:14,backgroundColor:C.purple,borderRadius:14,borderWidth:0.5,borderColor:C.gold,padding:14},resultTitle:{fontSize:13,color:C.gold,fontWeight:'500',marginBottom:6},resultBody:{fontSize:11,color:'#a08ab0',lineHeight:18},dayCell:{width:38,height:38,borderRadius:8,alignItems:'center',justifyContent:'center',borderWidth:0.5},shlokaCard:{backgroundColor:C.bgCard,borderWidth:0.5,borderColor:C.border,borderRadius:14,padding:14,marginBottom:10},sectionLabel:{fontSize:10,color:C.faint,textTransform:'uppercase',letterSpacing:1.5,marginBottom:4},settingCard:{backgroundColor:C.bgCard,borderRadius:14,borderWidth:0.5,borderColor:C.border,overflow:'hidden',marginBottom:4},settingRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',padding:12,paddingHorizontal:14,borderBottomWidth:0.5,borderColor:'#3a1a5a'},settingTitle:{fontSize:13,color:C.goldLight},settingSub:{fontSize:10,color:C.muted,marginTop:2},saveBtn:{alignItems:'center',justifyContent:'center',backgroundColor:C.purple,borderWidth:0.5,borderColor:C.gold,borderRadius:14,padding:14,marginTop:8},bottomNav:{flexDirection:'row',backgroundColor:C.bg,borderTopWidth:0.5,borderColor:C.borderFaint,paddingTop:8,paddingBottom:20},navItem:{flex:1,alignItems:'center',gap:3},navIcon:{fontSize:20},navLabel:{fontSize:9,color:C.fainter}});
-const ss2=StyleSheet.create({modeBtn:{flex:1,padding:8,borderRadius:8,backgroundColor:C.bgCard,borderWidth:0.5,borderColor:C.border,alignItems:'center'},modeBtnActive:{backgroundColor:C.purple,borderColor:C.gold},modeBtnText:{fontSize:11,color:C.muted},inputRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',padding:12,paddingHorizontal:14,borderBottomWidth:0.5,borderColor:'#3a1a5a'},input:{backgroundColor:C.bg,borderWidth:0.5,borderColor:C.border,borderRadius:8,color:C.gold,fontSize:13,paddingVertical:6,paddingHorizontal:10,minWidth:90,textAlign:'right'},timeRow:{flexDirection:'row',alignItems:'center',gap:4},timePart:{width:44,textAlign:'center',minWidth:44}});
+// --- STILURI ---
+const hd=StyleSheet.create({header:{flexDirection:'row',alignItems:'center',backgroundColor:C.bgDeep,padding:14,borderBottomWidth:0.5,borderColor:C.borderFaint},om:{fontSize:24,color:C.gold,marginRight:10},center:{flex:1},title:{fontSize:15,fontWeight:'500',color:C.goldLight},subtitle:{fontSize:9,color:C.muted},right:{alignItems:'flex-end'},timeLabel:{fontSize:11,color:C.gold},sunLabel:{fontSize:9,color:C.muted}});
+const td=StyleSheet.create({card:{margin:16,backgroundColor:C.bgCard,borderRadius:14,borderWidth:1,padding:14},topRow:{flexDirection:'row',alignItems:'center',marginBottom:10},colorDot:{width:12,height:12,borderRadius:6,marginRight:10},name:{fontSize:15,color:C.goldLight},infoRow:{flexDirection:'row'},infoItem:{flex:1},infoLabel:{fontSize:9,color:C.muted},infoVal:{fontSize:11,fontWeight:'500'},desc:{fontSize:11,color:'#a08ab0',marginTop:10}});
+const s=StyleSheet.create({svaraCard:{margin:16,backgroundColor:C.bgCard,borderRadius:16,padding:16,alignItems:'center',borderWidth:0.5,borderColor:C.border},svaraLabel
