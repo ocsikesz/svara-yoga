@@ -59,10 +59,14 @@ function calcSunrise(lat, lng, date = new Date()) {
   const dayOfYear = Math.floor((date - new Date(date.getFullYear(),0,0)) / 86400000);
   const B = (360/365)*(dayOfYear-81)*rad;
   const eot = 9.87*Math.sin(2*B) - 7.53*Math.cos(B) - 1.5*Math.sin(B);
-  const ha = Math.acos(-Math.tan(lat*rad)*Math.tan(23.45*rad*Math.sin(B))) / rad;
-  const lngCorr = 4*(lng%15);
-  const sunriseMin = 720 - 4*ha - eot + lngCorr;
-  const sunsetMin  = 720 + 4*ha - eot + lngCorr;
+  const decl = 23.45 * Math.sin(B) * rad;
+  const ha = Math.acos(-Math.tan(lat*rad)*Math.tan(decl)) / rad;
+  const tzOffsetMin = -date.getTimezoneOffset();
+  const sunriseUTC = 720 - 4*ha - eot - 4*lng;
+  const sunsetUTC  = 720 + 4*ha - eot - 4*lng;
+  const norm = m => ((m % 1440) + 1440) % 1440;
+  const sunriseMin = norm(sunriseUTC + tzOffsetMin);
+  const sunsetMin  = norm(sunsetUTC  + tzOffsetMin);
   const toHHMM = m => { const h=Math.floor(m/60)%24; const mn=Math.floor(m%60); return `${String(h).padStart(2,'0')}:${String(mn).padStart(2,'0')}`; };
   return { sunriseMin, sunsetMin, sunriseStr:toHHMM(sunriseMin), sunsetStr:toHHMM(sunsetMin) };
 }
@@ -125,10 +129,10 @@ function getTattvaProgress(sunriseMin, isGhatika, tattva) {
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
-function HomeScreen({ config, isGhatika }) {
+function HomeScreen({ config, isGhatika, manualSvara }) {
   const { sunriseMin, sunriseStr, sunsetStr, locationMode, sunriseMode } = config;
   const lunar = getLunarDay();
-  const [svara,        setSvara]        = useState(() => getSvaraFromSunrise(sunriseMin, lunar.day, lunar.paksha));
+  const [autoSvara,    setAutoSvara]    = useState(() => getSvaraFromSunrise(sunriseMin, lunar.day, lunar.paksha));
   const [activeTattva, setActiveTattva] = useState(() => getTattvaFromSunrise(sunriseMin, isGhatika));
   const [progress,     setProgress]     = useState(() => getTattvaProgress(sunriseMin, isGhatika, getTattvaFromSunrise(sunriseMin, isGhatika)));
   const [now,          setNow]          = useState(new Date());
@@ -137,7 +141,7 @@ function HomeScreen({ config, isGhatika }) {
     const tick = () => {
       const l = getLunarDay();
       const t = getTattvaFromSunrise(sunriseMin, isGhatika);
-      setSvara(getSvaraFromSunrise(sunriseMin, l.day, l.paksha));
+      setAutoSvara(getSvaraFromSunrise(sunriseMin, l.day, l.paksha));
       setActiveTattva(t);
       setProgress(getTattvaProgress(sunriseMin, isGhatika, t));
       setNow(new Date());
@@ -147,6 +151,7 @@ function HomeScreen({ config, isGhatika }) {
     return () => clearInterval(id);
   }, [sunriseMin, isGhatika]);
 
+  const svara = manualSvara || autoSvara;
   const timeStr = now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false });
   const seq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
   const nextTattva = seq[(seq.findIndex(t=>t.id===activeTattva.id)+1) % seq.length];
@@ -243,13 +248,13 @@ function HomeScreen({ config, isGhatika }) {
 }
 
 // ── SVARA ─────────────────────────────────────────────────────────────────────
-function SvaraScreen() {
-  const [picked, setPicked] = useState(null);
+function SvaraScreen({ picked, setPicked }) {
   const RESULTS = {
     ida:      { title:'Ida Nadi — Left Nostril active',    body:'The lunar, cooling channel flows. Ideal for peaceful, creative, and social activities.' },
     pingala:  { title:'Pingala Nadi — Right Nostril active', body:'The solar, warming channel flows. Energy and willpower heightened. Ideal for physical work and business.' },
     sushumna: { title:'Sushumna — Both nostrils equal',    body:'This rare sacred state occurs at nadi transitions. Sit immediately for meditation or mantra japa.' },
   };
+  const toggle = (id) => setPicked(picked === id ? null : id);
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
       <View style={s.screenHeader}><Text style={s.screenTitle}>Svara Identifier</Text><Text style={s.screenDesc}>Detect your active nadi right now</Text></View>
@@ -260,13 +265,13 @@ function SvaraScreen() {
       </View>
       <View style={s.btnRow}>
         {[{id:'ida',label:'Left (Ida)',icon:'🌙'},{id:'pingala',label:'Right (Pingala)',icon:'☀️'},{id:'sushumna',label:'Both equal',icon:'🔥'}].map(b=>(
-          <TouchableOpacity key={b.id} style={[s.svaraBtn,picked===b.id&&s.svaraBtnActive]} onPress={()=>setPicked(b.id)}>
+          <TouchableOpacity key={b.id} style={[s.svaraBtn,picked===b.id&&s.svaraBtnActive]} onPress={()=>toggle(b.id)}>
             <Text style={s.svaraBtnIcon}>{b.icon}</Text>
             <Text style={[s.svaraBtnLabel,picked===b.id&&{color:C.gold}]}>{b.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
-      {picked&&<View style={s.resultBox}><Text style={s.resultTitle}>{RESULTS[picked].title}</Text><Text style={s.resultBody}>{RESULTS[picked].body}</Text></View>}
+      {picked&&<View style={s.resultBox}><Text style={s.resultTitle}>{RESULTS[picked].title}</Text><Text style={s.resultBody}>{RESULTS[picked].body}</Text><Text style={[s.resultBody,{marginTop:8,fontStyle:'italic',color:C.gold}]}>✓ Active on Home screen (tap again to clear)</Text></View>}
     </ScrollView>
   );
 }
@@ -459,6 +464,7 @@ const DEFAULT_LAT = 25.3176, DEFAULT_LNG = 82.9739;
 function InnerApp() {
   const [activeTab, setActiveTab] = useState('home');
   const [isGhatika, setIsGhatika] = useState(false);
+  const [manualSvara, setManualSvara] = useState(null);
   const insets = useSafeAreaInsets();
   const [config, setConfig] = useState(() => {
     const calc = calcSunrise(DEFAULT_LAT, DEFAULT_LNG);
@@ -473,8 +479,8 @@ function InnerApp() {
   });
 
   const screens = {
-    home:     <HomeScreen config={config} isGhatika={isGhatika}/>,
-    svara:    <SvaraScreen/>,
+    home:     <HomeScreen config={config} isGhatika={isGhatika} manualSvara={manualSvara}/>,
+    svara:    <SvaraScreen picked={manualSvara} setPicked={setManualSvara}/>,
     lunar:    <LunarScreen/>,
     shlokas:  <ShlokasScreen/>,
     settings: <SettingsScreen config={config} setConfig={setConfig} isGhatika={isGhatika} setIsGhatika={setIsGhatika}/>,
