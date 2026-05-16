@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const C = {
   bg:'#1a0a2e', bgCard:'#2a1040', bgDeep:'#2a0a4a',
@@ -348,10 +349,26 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
   const getGPS = async () => {
     setGpsLoad(true);
     await new Promise(r=>setTimeout(r,1500));
-    setLat('46.5386'); setLng('24.5578'); setCity('Târgu Mureș');
+    const newLat = '46.5386', newLng = '24.5578', newCity = 'Târgu Mureș';
+    const latN = parseFloat(newLat), lngN = parseFloat(newLng);
+    setLat(newLat); setLng(newLng); setCity(newCity);
     setLocMode('gps');
-    Alert.alert('📡 GPS','Location detected! Real GPS active in APK build.');
+    // Auto-apply: recalculate sunrise/sunset and save config + persist to storage
+    let sunriseMin, sunsetMin, sunriseStr, sunsetStr;
+    if (srMode==='manual') {
+      sunriseMin = parseInt(srH)*60+parseInt(srM);
+      sunsetMin  = parseInt(ssH)*60+parseInt(ssM);
+      sunriseStr = `${srH}:${srM}`; sunsetStr = `${ssH}:${ssM}`;
+    } else {
+      const calc = calcSunrise(latN,lngN);
+      sunriseMin=calc.sunriseMin; sunsetMin=calc.sunsetMin;
+      sunriseStr=calc.sunriseStr; sunsetStr=calc.sunsetStr;
+    }
+    const newConfig = { city:newCity, lat:latN, lng:lngN, srH:parseInt(srH), srM:parseInt(srM), ssH:parseInt(ssH), ssM:parseInt(ssM), sunriseMin, sunsetMin, sunriseStr, sunsetStr, locationMode:'gps', sunriseMode:srMode, notifs };
+    setConfig(newConfig);
+    try { await AsyncStorage.setItem('lastGPS', JSON.stringify({lat:latN, lng:lngN, city:newCity})); } catch(e){}
     setGpsLoad(false);
+    Alert.alert('📡 GPS', `Location set to ${newCity}\nSunrise: ${sunriseStr} · Sunset: ${sunsetStr}`);
   };
 
   const handleSave = () => {
@@ -477,6 +494,29 @@ function InnerApp() {
       notifs:{ ida:true, pingala:true, sushumna:false, prithvi:true, apas:true, tejas:false, vayu:false, akasha:true },
     };
   });
+
+  // Load last GPS location on app start
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('lastGPS');
+        if (raw) {
+          const last = JSON.parse(raw);
+          if (last && typeof last.lat === 'number' && typeof last.lng === 'number') {
+            const calc = calcSunrise(last.lat, last.lng);
+            setConfig(prev => ({
+              ...prev,
+              city: last.city || prev.city,
+              lat: last.lat, lng: last.lng,
+              sunriseMin: calc.sunriseMin, sunsetMin: calc.sunsetMin,
+              sunriseStr: calc.sunriseStr, sunsetStr: calc.sunsetStr,
+              locationMode: 'gps',
+            }));
+          }
+        }
+      } catch(e) {}
+    })();
+  }, []);
 
   const screens = {
     home:     <HomeScreen config={config} isGhatika={isGhatika} manualSvara={manualSvara}/>,
