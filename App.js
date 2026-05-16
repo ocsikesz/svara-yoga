@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -548,6 +548,28 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
         <TouchableOpacity style={s.saveBtn} onPress={handleSave}>
           <Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>{saved?'✅  Settings Applied!':'💾  Save & Apply'}</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity style={[s.saveBtn,{marginTop:10,backgroundColor:C.bgCard}]} onPress={async()=>{
+          try {
+            const { status } = await Notifications.getPermissionsAsync();
+            if (status !== 'granted') {
+              const req = await Notifications.requestPermissionsAsync();
+              if (req.status !== 'granted') {
+                Alert.alert('Permission denied','Please enable notifications in your phone settings for Svara Yoga.');
+                return;
+              }
+            }
+            await Notifications.scheduleNotificationAsync({
+              content:{ title:'🕉️ Svara Yoga', body:'Test notification — notifications are working!', sound:true },
+              trigger: null,
+            });
+            Alert.alert('✓ Sent','Check your notification shade');
+          } catch(e) {
+            Alert.alert('Error',e.message||'Could not send notification');
+          }
+        }}>
+          <Text style={{color:C.muted,fontSize:14}}>🔔  Send Test Notification</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -607,8 +629,11 @@ function InnerApp() {
   }, []);
 
   // Watch for nadi and tattva changes, send notifications
+  const lastNadiRef   = useRef(null);
+  const lastTattvaRef = useRef(null);
+  const scheduledRef  = useRef(false);
+
   useEffect(() => {
-    let lastNadi = null, lastTattva = null;
     const TATTVA_INFO = {
       prithvi: { emoji:'🌍', name:'Prithvi (Earth)' },
       apas:    { emoji:'💧', name:'Apas (Water)' },
@@ -621,42 +646,90 @@ function InnerApp() {
       pingala:  { emoji:'☀️', name:'Pingala' },
       sushumna: { emoji:'🔥', name:'Sushumna' },
     };
+
+    // Schedule future notifications for the next 12 hours so they fire even when the app is closed.
+    // We re-run this whenever sunriseMin, isGhatika or the toggles change.
+    const scheduleFuture = async () => {
+      try {
+        await Notifications.cancelAllScheduledNotificationsAsync();
+        const now = new Date();
+        const nowMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
+        const sr = config.sunriseMin;
+        const cycleDur = isGhatika ? 120 : 60;
+        const seq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
+        let lastT = getTattvaFromSunrise(sr, isGhatika).id;
+        const l0 = getLunarDay();
+        let lastN = getSvaraFromSunrise(sr, l0.day, l0.paksha);
+        // Scan next 12 hours at 1-minute resolution
+        for (let dm = 1; dm <= 720; dm++) {
+          const futureMin = nowMin + dm;
+          // compute future tattva
+          const mFromSR = futureMin - sr;
+          let t;
+          if (mFromSR < 0) t = seq[0];
+          else {
+            const pos = mFromSR % cycleDur;
+            let e = 0;
+            t = seq[seq.length-1];
+            for (const x of seq) { e += isGhatika ? x.ghatika : x.classic; if (pos < e) { t = x; break; } }
+          }
+          // compute future nadi (changes at sunrise based on lunar day)
+          const futureDate = new Date(now.getTime() + dm*60000);
+          // approximation: nadi changes at sunrise; we use today's lunar day
+          const fl = getLunarDay();
+          const futureNadi = getSvaraFromSunrise(sr, fl.day, fl.paksha);
+          if (t.id !== lastT && config.notifs?.tattva) {
+            const ti = TATTVA_INFO[t.id];
+            const ni = NADI_INFO[futureNadi];
+            await Notifications.scheduleNotificationAsync({
+              content: { title: `${ti.emoji} ${ti.name.split(' ')[0]} · ${ni.emoji} ${ni.name}`, body: t.name+' is now active', sound:true },
+              trigger: { seconds: dm*60 },
+            });
+            lastT = t.id;
+          }
+          if (futureNadi !== lastN && config.notifs?.nadi) {
+            const ni = NADI_INFO[futureNadi];
+            const ti = TATTVA_INFO[t.id];
+            await Notifications.scheduleNotificationAsync({
+              content: { title: `${ni.emoji} ${ni.name} · ${ti.emoji} ${ti.name.split(' ')[0]}`, body: ni.name+' nadi is now active', sound:true },
+              trigger: { seconds: dm*60 },
+            });
+            lastN = futureNadi;
+          }
+        }
+      } catch(e) {}
+    };
+
+    // Foreground tick: catch transitions live (also shows notif if app is open)
     const tick = async () => {
       try {
         const l = getLunarDay();
         const currentNadi = getSvaraFromSunrise(config.sunriseMin, l.day, l.paksha);
         const currentTattva = getTattvaFromSunrise(config.sunriseMin, isGhatika).id;
-        const combo = RECOMMENDATIONS[currentNadi+'_'+currentTattva];
-        if (lastNadi !== null && currentNadi !== lastNadi && config.notifs?.nadi) {
+        if (lastNadiRef.current !== null && currentNadi !== lastNadiRef.current && config.notifs?.nadi) {
           const ni = NADI_INFO[currentNadi];
           const ti = TATTVA_INFO[currentTattva];
           await Notifications.scheduleNotificationAsync({
-            content: {
-              title: `${ni.emoji} ${ni.name} · ${ti.emoji} ${ti.name.split(' ')[0]}`,
-              body:  combo?.mood || ni.name,
-              sound: true,
-            },
+            content: { title:`${ni.emoji} ${ni.name} · ${ti.emoji} ${ti.name.split(' ')[0]}`, body:ni.name+' nadi is now active', sound:true },
             trigger: null,
           });
         }
-        if (lastTattva !== null && currentTattva !== lastTattva && config.notifs?.tattva) {
+        if (lastTattvaRef.current !== null && currentTattva !== lastTattvaRef.current && config.notifs?.tattva) {
           const ni = NADI_INFO[currentNadi];
           const ti = TATTVA_INFO[currentTattva];
           await Notifications.scheduleNotificationAsync({
-            content: {
-              title: `${ti.emoji} ${ti.name.split(' ')[0]} · ${ni.emoji} ${ni.name}`,
-              body:  combo?.mood || ti.name,
-              sound: true,
-            },
+            content: { title:`${ti.emoji} ${ti.name.split(' ')[0]} · ${ni.emoji} ${ni.name}`, body:ti.name+' is now active', sound:true },
             trigger: null,
           });
         }
-        lastNadi = currentNadi;
-        lastTattva = currentTattva;
+        lastNadiRef.current = currentNadi;
+        lastTattvaRef.current = currentTattva;
       } catch(e) {}
     };
+
     tick();
-    const id = setInterval(tick, 30000);
+    scheduleFuture();
+    const id = setInterval(tick, 10000);
     return () => clearInterval(id);
   }, [config.sunriseMin, isGhatika, config.notifs?.nadi, config.notifs?.tattva]);
 
