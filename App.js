@@ -61,6 +61,30 @@ const LUNAR_DAYS = [
   {day:13,nadi:'ida'},{day:14,nadi:'ida'},{day:15,nadi:'pingala'},
 ];
 
+// ── RECOMMENDATIONS MATRIX (Nadi × Tattva = 15 combinations) ──────────────────
+const RECOMMENDATIONS = {
+  // IDA = cooling, lunar, feminine, peaceful
+  ida_prithvi:  { mood:'Most auspicious — peaceful & grounded', favor:['Long-term planning','Meditation, study, prayer','Healing & rest','Planting, building, slow work'], avoid:['Hasty decisions','Travel south or west'] },
+  ida_apas:     { mood:'Highly auspicious — flowing & creative', favor:['Romance & affection','Healing arts & medicine','Writing, music, art','Drinking water, cleansing'], avoid:['Conflict & arguments','Burning bridges'] },
+  ida_tejas:    { mood:'Mixed — gentle channel, intense fire', favor:['Reading sacred texts','Light cooking','Brief, focused tasks'], avoid:['Starting new ventures','Surgery, intense exertion','Lengthy arguments'] },
+  ida_vayu:     { mood:'Restless — calm channel, moving fire', favor:['Walking gently','Light correspondence','Adjusting plans'], avoid:['Important travel','Long meetings','Financial commitments'] },
+  ida_akasha:   { mood:'Sacred — transcendent stillness', favor:['Deep meditation','Mantra & japa','Stillness, prayer','Contemplation of death/liberation'], avoid:['ANY worldly task','Business, conflict, food'] },
+
+  // PINGALA = warming, solar, masculine, active
+  pingala_prithvi: { mood:'Strong & stable — grounded power', favor:['Heavy physical work','Construction, agriculture','Endurance training','Defending boundaries'], avoid:['Subtle/delicate work','Emotional conversations'] },
+  pingala_apas:    { mood:'Mixed — active channel, soft element', favor:['Cooking, eating, hydration','Brief social gatherings','Athletic recovery'], avoid:['Prolonged debate','Aggressive negotiation'] },
+  pingala_tejas:   { mood:'Peak intensity — fierce courage', favor:['Bold decisions & action','Physical contests','Confrontation if needed','Surgery, fire ceremonies'], avoid:['Gentle conversations','Sensitive matters','Romance'] },
+  pingala_vayu:    { mood:'Dynamic — movement & speed', favor:['Travel & journeys','Sports, running','Quick negotiations','Sales & deals'], avoid:['Sitting meditation','Slow detailed work','Important contracts'] },
+  pingala_akasha:  { mood:'Sacred — power meets stillness', favor:['Brief, powerful prayer','Strong intention setting','Letting go'], avoid:['Starting anything new','Major decisions','Travel'] },
+
+  // SUSHUMNA = balanced, sacred, RARE
+  sushumna_prithvi: { mood:'★ Rare gift — sit immediately', favor:['Meditation, japa, prayer','Total silence','Inner contemplation'], avoid:['ALL worldly activity'] },
+  sushumna_apas:    { mood:'★ Rare gift — sit immediately', favor:['Meditation, japa, prayer','Devotional song','Inner flow'], avoid:['ALL worldly activity'] },
+  sushumna_tejas:   { mood:'★ Rare gift — sit immediately', favor:['Meditation, japa, prayer','Burning karma in silence'], avoid:['ALL worldly activity'] },
+  sushumna_vayu:    { mood:'★ Rare gift — sit immediately', favor:['Meditation, japa, prayer','Watching breath, watching mind'], avoid:['ALL worldly activity'] },
+  sushumna_akasha:  { mood:'★★ Most sacred moment in the day', favor:['Deepest meditation','Surrender, devotion','Ask for liberation'], avoid:['Speaking, eating, anything outer'] },
+};
+
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function calcSunrise(lat, lng, date = new Date()) {
   const times = SunCalc.getTimes(date, lat, lng);
@@ -253,16 +277,21 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
         <Text style={{fontSize:12,color:C.faint,marginTop:8}}>Next → {nextTattva.emoji} {nextTattva.name}</Text>
       </View>
 
+      <View style={s.moodCard}>
+        <Text style={s.moodLabel}>{sm.name.split(' ')[0]} + {activeTattva.name}</Text>
+        <Text style={s.moodText}>{(RECOMMENDATIONS[svara+'_'+activeTattva.id]||{}).mood||'Observing the moment'}</Text>
+      </View>
+
       <View style={s.ddRow}>
         <View style={[s.ddBox,{backgroundColor:C.greenBg,borderColor:C.greenBorder}]}>
           <Text style={[s.ddHeader,{color:C.green}]}>✓  Favorable</Text>
-          {["Calm, peaceful activities","Learning & reflection","Healing & rest"].map((d,i)=>
+          {((RECOMMENDATIONS[svara+'_'+activeTattva.id]||{}).favor||["Calm, peaceful activities","Learning & reflection","Healing & rest"]).map((d,i)=>
             <View key={i} style={s.ddItem}><View style={[s.ddDot,{backgroundColor:C.green}]}/><Text style={[s.ddText,{color:'#5ac090'}]}>{d}</Text></View>
           )}
         </View>
         <View style={[s.ddBox,{backgroundColor:C.redBg,borderColor:C.redBorder}]}>
           <Text style={[s.ddHeader,{color:C.red}]}>✕  Avoid</Text>
-          {["Conflict & arguments","Heavy exertion","Major decisions"].map((d,i)=>
+          {((RECOMMENDATIONS[svara+'_'+activeTattva.id]||{}).avoid||["Conflict & arguments","Heavy exertion","Major decisions"]).map((d,i)=>
             <View key={i} style={s.ddItem}><View style={[s.ddDot,{backgroundColor:C.red}]}/><Text style={[s.ddText,{color:'#c06060'}]}>{d}</Text></View>
           )}
         </View>
@@ -679,6 +708,9 @@ const s = StyleSheet.create({
   compareLabel: { fontSize:11, color:C.muted, textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 },
   compareValue: { fontSize:14, fontWeight:'500', color:C.goldLight },
   compareArrow: { fontSize:12, color:C.faint, marginHorizontal:8, fontStyle:'italic' },
+  moodCard:     { marginHorizontal:16, marginBottom:8, paddingVertical:12, paddingHorizontal:14, backgroundColor:C.purple, borderRadius:12, borderWidth:0.5, borderColor:C.gold, alignItems:'center' },
+  moodLabel:    { fontSize:11, color:C.muted, textTransform:'uppercase', letterSpacing:1, marginBottom:4 },
+  moodText:     { fontSize:15, color:C.gold, fontWeight:'500', textAlign:'center', fontStyle:'italic' },
   tattvaRow:    { flexDirection:'row', marginHorizontal:16, marginBottom:12, gap:6 },
   tattvaPill:   { flex:1, backgroundColor:C.bgCard, borderWidth:0.5, borderColor:C.border, borderRadius:12, paddingVertical:14, alignItems:'center' },
   tattvaPillActive:{ backgroundColor:C.purple, borderColor:C.gold },
