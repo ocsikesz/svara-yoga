@@ -609,22 +609,45 @@ function InnerApp() {
   // Watch for nadi and tattva changes, send notifications
   useEffect(() => {
     let lastNadi = null, lastTattva = null;
-    const TATTVA_NAMES = { prithvi:'Prithvi (Earth)', apas:'Apas (Water)', tejas:'Tejas (Fire)', vayu:'Vayu (Air)', akasha:'Akasha (Ether)' };
-    const NADI_NAMES = { ida:'Ida — Left Nostril', pingala:'Pingala — Right Nostril', sushumna:'Sushumna — Both Equal' };
+    const TATTVA_INFO = {
+      prithvi: { emoji:'🌍', name:'Prithvi (Earth)' },
+      apas:    { emoji:'💧', name:'Apas (Water)' },
+      tejas:   { emoji:'🔥', name:'Tejas (Fire)' },
+      vayu:    { emoji:'🌬', name:'Vayu (Air)' },
+      akasha:  { emoji:'✨', name:'Akasha (Ether)' },
+    };
+    const NADI_INFO = {
+      ida:      { emoji:'🌙', name:'Ida' },
+      pingala:  { emoji:'☀️', name:'Pingala' },
+      sushumna: { emoji:'🔥', name:'Sushumna' },
+    };
     const tick = async () => {
       try {
         const l = getLunarDay();
         const currentNadi = getSvaraFromSunrise(config.sunriseMin, l.day, l.paksha);
         const currentTattva = getTattvaFromSunrise(config.sunriseMin, isGhatika).id;
+        const combo = RECOMMENDATIONS[currentNadi+'_'+currentTattva];
         if (lastNadi !== null && currentNadi !== lastNadi && config.notifs?.nadi) {
+          const ni = NADI_INFO[currentNadi];
+          const ti = TATTVA_INFO[currentTattva];
           await Notifications.scheduleNotificationAsync({
-            content: { title:'🌬 Nadi changed', body:NADI_NAMES[currentNadi]||currentNadi, sound:true },
+            content: {
+              title: `${ni.emoji} ${ni.name} · ${ti.emoji} ${ti.name.split(' ')[0]}`,
+              body:  combo?.mood || ni.name,
+              sound: true,
+            },
             trigger: null,
           });
         }
         if (lastTattva !== null && currentTattva !== lastTattva && config.notifs?.tattva) {
+          const ni = NADI_INFO[currentNadi];
+          const ti = TATTVA_INFO[currentTattva];
           await Notifications.scheduleNotificationAsync({
-            content: { title:'🪐 Tattva changed', body:TATTVA_NAMES[currentTattva]||currentTattva, sound:true },
+            content: {
+              title: `${ti.emoji} ${ti.name.split(' ')[0]} · ${ni.emoji} ${ni.name}`,
+              body:  combo?.mood || ti.name,
+              sound: true,
+            },
             trigger: null,
           });
         }
