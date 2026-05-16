@@ -628,13 +628,14 @@ function InnerApp() {
     })();
   }, []);
 
-  // Watch for nadi and tattva changes, send notifications.
-  // Strategy: only fire notifications when the value ACTUALLY changes from the
-  // previously-seen-and-persisted value (across app restarts via AsyncStorage).
-  // No scheduling in advance — this avoids stale Android-queued notifications
-  // firing on app open.
-  const initRef = useRef(false);
-
+  // Notifications strategy:
+  // - Compute EXACT moments when nadi or tattva will change in the next 24 hours.
+  // - Schedule one notification per transition with trigger:{seconds:N}.
+  // - Android delivers these even when the app is closed.
+  // - Re-schedule whenever sunrise/Ghatika/toggles change, or when the app is
+  //   opened (the useEffect re-runs).
+  // - We tag scheduled notifications with identifier='svara-tx' so we cancel
+  //   only ours, not user-test ones.
   useEffect(() => {
     const TATTVA_INFO = {
       prithvi: { emoji:'🌍', name:'Prithvi (Earth)' },
@@ -649,68 +650,120 @@ function InnerApp() {
       sushumna: { emoji:'🔥', name:'Sushumna' },
     };
 
-    let cancelled = false;
-    let lastNadi = null;
-    let lastTattva = null;
-
-    // 1) On first run after app start: clear any leftover queued notifications,
-    //    and load the previous nadi/tattva that the user last *saw*.
-    const init = async () => {
-      try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
+    const scheduleAll = async () => {
       try {
-        const raw = await AsyncStorage.getItem('lastSeen');
-        if (raw) {
-          const obj = JSON.parse(raw);
-          if (obj && typeof obj === 'object') {
-            lastNadi   = obj.nadi   || null;
-            lastTattva = obj.tattva || null;
+        // Clear any previously scheduled svara notifications
+        const all = await Notifications.getAllScheduledNotificationsAsync();
+        for (const n of (all || [])) {
+          if (n.content?.data?.kind === 'svara-tx') {
+            try { await Notifications.cancelScheduledNotificationAsync(n.identifier); } catch(e) {}
+          }
+        }
+
+        const now = new Date();
+        const nowMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
+        const sr = config.sunriseMin;
+        const cycleDur = isGhatika ? 120 : 60;
+        const seq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
+
+        // Build list of TATTVA transitions in the next 24h (1440 min).
+        // Tattva pattern repeats every cycleDur min starting from sunrise.
+        const txs = []; // {dm:minutesFromNow, type:'tattva'|'nadi', toId}
+        if (config.notifs?.tattva) {
+          // Find the position-within-cycle at "now"
+          let mFromSR = nowMin - sr;
+          if (mFromSR < 0) mFromSR += 1440; // before sunrise → use yesterday's cycle continuation
+          // Walk forward 24h, finding each tattva boundary
+          for (let dm = 0; dm <= 1440; dm++) {
+            const futureMFromSR = mFromSR + dm;
+            const pos = ((futureMFromSR % cycleDur) + cycleDur) % cycleDur;
+            // Check if pos is exactly at a tattva boundary
+            let e = 0;
+            for (let i = 0; i < seq.length; i++) {
+              e += isGhatika ? seq[i].ghatika : seq[i].classic;
+              if (pos === e % cycleDur) {
+                // Transition to next tattva
+                const nextIdx = (i + 1) % seq.length;
+                if (dm > 0) txs.push({ dm, type:'tattva', toId: seq[nextIdx].id });
+                break;
+              }
+            }
+          }
+        }
+
+        // NADI transitions happen at sunrise each day; nadi for a given day
+        // depends on lunar paksha and tithi (already in getSvaraFromSunrise).
+        // Compute when tomorrow's sunrise is in minutes-from-now.
+        if (config.notifs?.nadi) {
+          let dmSunriseTomorrow = sr - nowMin;
+          if (dmSunriseTomorrow <= 0) dmSunriseTomorrow += 1440;
+          // Schedule the next ~5 sunrises (5 days of nadi alerts)
+          for (let day = 0; day < 5; day++) {
+            const dm = dmSunriseTomorrow + day*1440;
+            if (dm > 0 && dm <= 5*1440) {
+              // We don't know tomorrow's exact nadi without recomputing lunar
+              // day for that date — but for a same-day approximation, use
+              // today's lunar day shifted by `day`.
+              const futureDate = new Date(now.getTime() + dm*60000);
+              const dayInMonth = Math.floor((futureDate - new Date(2024,5,6))/86400000);
+              const dInCycle = ((dayInMonth % 30) + 30) % 30;
+              const paksha = dInCycle < 15 ? 'shukla' : 'krishna';
+              const tithi = (dInCycle % 15) + 1;
+              const nadiAtSunrise = getSvaraFromSunrise(sr, tithi, paksha);
+              txs.push({ dm, type:'nadi', toId: nadiAtSunrise });
+            }
+          }
+        }
+
+        // Sort and limit (Android caps at ~50 scheduled notifications per app)
+        txs.sort((a,b) => a.dm - b.dm);
+        const limited = txs.slice(0, 40);
+
+        // Schedule each transition with appropriate trigger
+        for (const tx of limited) {
+          // Compute what nadi/tattva will be active AT that moment for the body text
+          const futureMFromSR = (nowMin - sr + tx.dm + 1440) % 1440;
+          const pos = ((futureMFromSR % cycleDur) + cycleDur) % cycleDur;
+          let activeTat = seq[0];
+          let e = 0;
+          for (const x of seq) { e += isGhatika ? x.ghatika : x.classic; if (pos < e) { activeTat = x; break; } }
+          // For tattva transitions, the new tattva is tx.toId
+          // For nadi transitions, recompute active tattva at sunrise
+          if (tx.type === 'tattva') {
+            const ti = TATTVA_INFO[tx.toId];
+            if (!ti) continue;
+            const ni = NADI_INFO[ tx.type === 'nadi' ? tx.toId : 'ida' ];
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: `${ti.emoji}  ${ti.name.split(' ')[0]} active`,
+                body:  `Tattva changed to ${ti.name}`,
+                sound: true,
+                data:  { kind:'svara-tx' },
+              },
+              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
+            });
+          } else {
+            const ni = NADI_INFO[tx.toId];
+            if (!ni) continue;
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: `${ni.emoji}  ${ni.name} active`,
+                body:  `${ni.name} nadi is now flowing`,
+                sound: true,
+                data:  { kind:'svara-tx' },
+              },
+              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
+            });
           }
         }
       } catch(e) {}
-      initRef.current = true;
     };
 
-    const tick = async () => {
-      if (cancelled) return;
-      if (!initRef.current) { await init(); }
-      try {
-        const l = getLunarDay();
-        const currentNadi   = getSvaraFromSunrise(config.sunriseMin, l.day, l.paksha);
-        const currentTattva = getTattvaFromSunrise(config.sunriseMin, isGhatika).id;
-
-        // Fire only when value really changed AND we have a previous value
-        // (lastNadi/lastTattva are loaded from storage so this survives restarts)
-        if (lastNadi !== null && currentNadi !== lastNadi && config.notifs?.nadi) {
-          const ni = NADI_INFO[currentNadi];
-          const ti = TATTVA_INFO[currentTattva];
-          await Notifications.scheduleNotificationAsync({
-            content: { title:`${ni.emoji} ${ni.name} · ${ti.emoji} ${ti.name.split(' ')[0]}`, body:ni.name+' nadi is now active', sound:true },
-            trigger: null,
-          });
-        }
-        if (lastTattva !== null && currentTattva !== lastTattva && config.notifs?.tattva) {
-          const ni = NADI_INFO[currentNadi];
-          const ti = TATTVA_INFO[currentTattva];
-          await Notifications.scheduleNotificationAsync({
-            content: { title:`${ti.emoji} ${ti.name.split(' ')[0]} · ${ni.emoji} ${ni.name}`, body:ti.name+' is now active', sound:true },
-            trigger: null,
-          });
-        }
-
-        // Persist the just-seen values so next restart knows them
-        if (currentNadi !== lastNadi || currentTattva !== lastTattva) {
-          lastNadi = currentNadi;
-          lastTattva = currentTattva;
-          try {
-            await AsyncStorage.setItem('lastSeen', JSON.stringify({ nadi:lastNadi, tattva:lastTattva }));
-          } catch(e) {}
-        }
-      } catch(e) {}
-    };
-
-    tick();
-    const id = setInterval(tick, 10000);
-    return () => { cancelled = true; clearInterval(id); };
+    scheduleAll();
+    // Re-schedule periodically while app is open (every 5 min) to keep the
+    // pipeline fresh as time passes and old notifications fire.
+    const id = setInterval(scheduleAll, 5*60*1000);
+    return () => clearInterval(id);
   }, [config.sunriseMin, isGhatika, config.notifs?.nadi, config.notifs?.tattva]);
 
   const screens = {
