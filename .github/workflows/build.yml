@@ -3,11 +3,33 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version
+        id: version
+        run: |
+          BASE=$(node -p "require('./app.json').expo.version")
+          MAJOR=$(echo "$BASE" | cut -d. -f1)
+          BUILD=$(git rev-list --count HEAD)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          FULL="${MAJOR}.${BUILD}"
+          echo "base=${BASE}"          >> "$GITHUB_OUTPUT"
+          echo "major=${MAJOR}"        >> "$GITHUB_OUTPUT"
+          echo "build=${BUILD}"        >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "full=${FULL}"          >> "$GITHUB_OUTPUT"
+          echo "apk_name=svara-yoga-v${FULL}.apk" >> "$GITHUB_OUTPUT"
+          echo "📦 Building Svara Yoga v${FULL} (commit ${SHORT_SHA})"
 
       - uses: actions/setup-node@v4
         with:
@@ -59,9 +81,43 @@ jobs:
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
-      - name: Upload APK
+      - name: Rename APK with version
+        id: rename
+        run: |
+          mkdir -p dist
+          SRC=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          DST="dist/${{ steps.version.outputs.apk_name }}"
+          cp "$SRC" "$DST"
+          ls -lh dist/
+          echo "apk_path=${DST}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: svara-yoga-apk
-          path: android/app/build/outputs/apk/release/*.apk
-          retention-days: 30
+          name: svara-yoga-v${{ steps.version.outputs.full }}
+          path: dist/${{ steps.version.outputs.apk_name }}
+          retention-days: 90
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.full }}
+          name: Svara Yoga v${{ steps.version.outputs.full }}
+          body: |
+            🕉️ **Svara Yoga v${{ steps.version.outputs.full }}**
+
+            - Base version: `${{ steps.version.outputs.base }}`
+            - Build number: `${{ steps.version.outputs.build }}`
+            - Commit: `${{ steps.version.outputs.short_sha }}`
+
+            ### 📥 Install
+            Download the APK below, uninstall any older version on your phone, then install.
+
+            ### 📝 Changes
+            See commit: ${{ github.event.head_commit.message }}
+          files: dist/${{ steps.version.outputs.apk_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
