@@ -4,6 +4,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SunCalc from 'suncalc';
 import * as Notifications from 'expo-notifications';
+import * as Location from 'expo-location';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowAlert:true, shouldPlaySound:true, shouldSetBadge:false }),
@@ -378,27 +379,47 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
 
   const getGPS = async () => {
     setGpsLoad(true);
-    await new Promise(r=>setTimeout(r,1500));
-    const newLat = '46.5386', newLng = '24.5578', newCity = 'Târgu Mureș';
-    const latN = parseFloat(newLat), lngN = parseFloat(newLng);
-    setLat(newLat); setLng(newLng); setCity(newCity);
-    setLocMode('gps');
-    // Auto-apply: recalculate sunrise/sunset and save config + persist to storage
-    let sunriseMin, sunsetMin, sunriseStr, sunsetStr;
-    if (srMode==='manual') {
-      sunriseMin = parseInt(srH)*60+parseInt(srM);
-      sunsetMin  = parseInt(ssH)*60+parseInt(ssM);
-      sunriseStr = `${srH}:${srM}`; sunsetStr = `${ssH}:${ssM}`;
-    } else {
-      const calc = calcSunrise(latN,lngN);
-      sunriseMin=calc.sunriseMin; sunsetMin=calc.sunsetMin;
-      sunriseStr=calc.sunriseStr; sunsetStr=calc.sunsetStr;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setGpsLoad(false);
+        Alert.alert('Permission denied','Location permission is required to detect sunrise from your position.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const latN = loc.coords.latitude;
+      const lngN = loc.coords.longitude;
+      let newCity = 'Current Location';
+      try {
+        const geo = await Location.reverseGeocodeAsync({ latitude: latN, longitude: lngN });
+        if (geo && geo.length > 0) {
+          newCity = geo[0].city || geo[0].district || geo[0].region || 'Current Location';
+        }
+      } catch(e) {}
+      const newLat = latN.toFixed(4);
+      const newLng = lngN.toFixed(4);
+      setLat(newLat); setLng(newLng); setCity(newCity);
+      setLocMode('gps');
+      // Auto-apply: recalculate sunrise/sunset and save config + persist to storage
+      let sunriseMin, sunsetMin, sunriseStr, sunsetStr;
+      if (srMode==='manual') {
+        sunriseMin = parseInt(srH)*60+parseInt(srM);
+        sunsetMin  = parseInt(ssH)*60+parseInt(ssM);
+        sunriseStr = `${srH}:${srM}`; sunsetStr = `${ssH}:${ssM}`;
+      } else {
+        const calc = calcSunrise(latN,lngN);
+        sunriseMin=calc.sunriseMin; sunsetMin=calc.sunsetMin;
+        sunriseStr=calc.sunriseStr; sunsetStr=calc.sunsetStr;
+      }
+      const newConfig = { city:newCity, lat:latN, lng:lngN, srH:parseInt(srH), srM:parseInt(srM), ssH:parseInt(ssH), ssM:parseInt(ssM), sunriseMin, sunsetMin, sunriseStr, sunsetStr, locationMode:'gps', sunriseMode:srMode, notifs };
+      setConfig(newConfig);
+      try { await AsyncStorage.setItem('lastGPS', JSON.stringify({lat:latN, lng:lngN, city:newCity})); } catch(e){}
+      setGpsLoad(false);
+      Alert.alert('📡 GPS', `${newCity}\n${latN.toFixed(4)}, ${lngN.toFixed(4)}\nSunrise: ${sunriseStr} · Sunset: ${sunsetStr}`);
+    } catch(e) {
+      setGpsLoad(false);
+      Alert.alert('GPS Error', 'Could not get location: '+(e.message||'unknown error'));
     }
-    const newConfig = { city:newCity, lat:latN, lng:lngN, srH:parseInt(srH), srM:parseInt(srM), ssH:parseInt(ssH), ssM:parseInt(ssM), sunriseMin, sunsetMin, sunriseStr, sunsetStr, locationMode:'gps', sunriseMode:srMode, notifs };
-    setConfig(newConfig);
-    try { await AsyncStorage.setItem('lastGPS', JSON.stringify({lat:latN, lng:lngN, city:newCity})); } catch(e){}
-    setGpsLoad(false);
-    Alert.alert('📡 GPS', `Location set to ${newCity}\nSunrise: ${sunriseStr} · Sunset: ${sunsetStr}`);
   };
 
   const handleSave = () => {
