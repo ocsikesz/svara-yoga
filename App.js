@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import SunCalc from 'suncalc';
+import * as Notifications from 'expo-notifications';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({ shouldShowAlert:true, shouldPlaySound:true, shouldSetBadge:false }),
+});
 
 const C = {
   bg:'#1a0a2e', bgCard:'#2a1040', bgDeep:'#2a0a4a',
@@ -56,20 +62,18 @@ const LUNAR_DAYS = [
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function calcSunrise(lat, lng, date = new Date()) {
-  const rad = Math.PI / 180;
-  const dayOfYear = Math.floor((date - new Date(date.getFullYear(),0,0)) / 86400000);
-  const B = (360/365)*(dayOfYear-81)*rad;
-  const eot = 9.87*Math.sin(2*B) - 7.53*Math.cos(B) - 1.5*Math.sin(B);
-  const decl = 23.45 * Math.sin(B) * rad;
-  const ha = Math.acos(-Math.tan(lat*rad)*Math.tan(decl)) / rad;
-  const tzOffsetMin = -date.getTimezoneOffset();
-  const sunriseUTC = 720 - 4*ha - eot - 4*lng;
-  const sunsetUTC  = 720 + 4*ha - eot - 4*lng;
-  const norm = m => ((m % 1440) + 1440) % 1440;
-  const sunriseMin = norm(sunriseUTC + tzOffsetMin);
-  const sunsetMin  = norm(sunsetUTC  + tzOffsetMin);
-  const toHHMM = m => { const h=Math.floor(m/60)%24; const mn=Math.floor(m%60); return `${String(h).padStart(2,'0')}:${String(mn).padStart(2,'0')}`; };
-  return { sunriseMin, sunsetMin, sunriseStr:toHHMM(sunriseMin), sunsetStr:toHHMM(sunsetMin) };
+  const times = SunCalc.getTimes(date, lat, lng);
+  const toLocalMin = d => {
+    if (!d || isNaN(d.getTime())) return 0;
+    return d.getHours()*60 + d.getMinutes() + d.getSeconds()/60;
+  };
+  const toHHMM = d => {
+    if (!d || isNaN(d.getTime())) return '--:--';
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+  const sunriseMin = toLocalMin(times.sunrise);
+  const sunsetMin  = toLocalMin(times.sunset);
+  return { sunriseMin, sunsetMin, sunriseStr:toHHMM(times.sunrise), sunsetStr:toHHMM(times.sunset) };
 }
 
 function getLunarDay() {
@@ -192,10 +196,29 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
       <Text style={hd.srcLabel}>{srcLabel} · {isGhatika?'Ghatika':'Classic'} system</Text>
 
       <View style={s.svaraCard}>
-        <Text style={s.svaraLabel}>Active Svara</Text>
+        <Text style={s.svaraLabel}>{manualSvara?'Active Now (Manual)':'Active Svara'}</Text>
         <Text style={s.svaraName}>{sm.name}</Text>
         <View style={s.badge}><Text style={s.badgeText}>{sm.tag}</Text></View>
       </View>
+
+      {manualSvara && manualSvara !== autoSvara && (
+        <View style={s.compareCard}>
+          <View style={s.compareItem}>
+            <Text style={s.compareLabel}>📜 By Sunrise</Text>
+            <Text style={s.compareValue}>{SVARA_META[autoSvara].name}</Text>
+          </View>
+          <Text style={s.compareArrow}>vs</Text>
+          <View style={s.compareItem}>
+            <Text style={s.compareLabel}>👃 You Feel</Text>
+            <Text style={[s.compareValue,{color:C.gold}]}>{sm.name}</Text>
+          </View>
+        </View>
+      )}
+      {manualSvara && manualSvara === autoSvara && (
+        <View style={[s.compareCard,{borderColor:C.green,backgroundColor:C.greenBg}]}>
+          <Text style={[s.compareLabel,{color:C.green,fontSize:14}]}>✓ Match — your breath aligns with the sunrise calculation</Text>
+        </View>
+      )}
 
       <View style={s.tattvaRow}>
         {seq.map(t=>(
@@ -485,7 +508,7 @@ const DEFAULT_LAT = 25.3176, DEFAULT_LNG = 82.9739;
 
 function InnerApp() {
   const [activeTab, setActiveTab] = useState('home');
-  const [isGhatika, setIsGhatika] = useState(false);
+  const [isGhatika, setIsGhatika] = useState(true);
   const [manualSvara, setManualSvara] = useState(null);
   const insets = useSafeAreaInsets();
   const [config, setConfig] = useState(() => {
@@ -523,6 +546,47 @@ function InnerApp() {
     })();
   }, []);
 
+  // Request notification permissions on first launch
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted') await Notifications.requestPermissionsAsync();
+      } catch(e) {}
+    })();
+  }, []);
+
+  // Watch for nadi and tattva changes, send notifications
+  useEffect(() => {
+    let lastNadi = null, lastTattva = null;
+    const TATTVA_NAMES = { prithvi:'Prithvi (Earth)', apas:'Apas (Water)', tejas:'Tejas (Fire)', vayu:'Vayu (Air)', akasha:'Akasha (Ether)' };
+    const NADI_NAMES = { ida:'Ida — Left Nostril', pingala:'Pingala — Right Nostril', sushumna:'Sushumna — Both Equal' };
+    const tick = async () => {
+      try {
+        const l = getLunarDay();
+        const currentNadi = getSvaraFromSunrise(config.sunriseMin, l.day, l.paksha);
+        const currentTattva = getTattvaFromSunrise(config.sunriseMin, isGhatika).id;
+        if (lastNadi !== null && currentNadi !== lastNadi && config.notifs?.nadi) {
+          await Notifications.scheduleNotificationAsync({
+            content: { title:'🌬 Nadi changed', body:NADI_NAMES[currentNadi]||currentNadi, sound:true },
+            trigger: null,
+          });
+        }
+        if (lastTattva !== null && currentTattva !== lastTattva && config.notifs?.tattva) {
+          await Notifications.scheduleNotificationAsync({
+            content: { title:'🪐 Tattva changed', body:TATTVA_NAMES[currentTattva]||currentTattva, sound:true },
+            trigger: null,
+          });
+        }
+        lastNadi = currentNadi;
+        lastTattva = currentTattva;
+      } catch(e) {}
+    };
+    tick();
+    const id = setInterval(tick, 30000);
+    return () => clearInterval(id);
+  }, [config.sunriseMin, isGhatika, config.notifs?.nadi, config.notifs?.tattva]);
+
   const screens = {
     home:     <HomeScreen config={config} isGhatika={isGhatika} manualSvara={manualSvara}/>,
     svara:    <SvaraScreen picked={manualSvara} setPicked={setManualSvara}/>,
@@ -558,12 +622,12 @@ const hd = StyleSheet.create({
   title:     { fontSize:22, fontWeight:'500', color:C.goldLight, letterSpacing:0.8 },
   subtitle:  { fontSize:13, color:C.muted, marginTop:3 },
   timeLabel: { fontSize:18, color:C.gold, fontWeight:'500' },
-  sunBig:    { flexDirection:'row', alignItems:'center', justifyContent:'space-around', backgroundColor:C.bgDeep, paddingVertical:16, paddingHorizontal:20, marginHorizontal:0, borderBottomWidth:0.5, borderColor:C.borderFaint },
+  sunBig:    { flexDirection:'row', alignItems:'center', justifyContent:'space-around', backgroundColor:C.bgDeep, paddingVertical:10, paddingHorizontal:20, borderBottomWidth:0.5, borderColor:C.borderFaint },
   sunItem:   { flex:1, alignItems:'center' },
-  sunDivider:{ width:0.5, height:50, backgroundColor:C.borderFaint },
-  sunIcon:   { fontSize:30, marginBottom:4 },
-  sunTime:   { fontSize:24, fontWeight:'500', color:C.goldLight, letterSpacing:1 },
-  sunLabelBig:{ fontSize:11, color:C.muted, marginTop:2, textTransform:'uppercase', letterSpacing:1 },
+  sunDivider:{ width:0.5, height:34, backgroundColor:C.borderFaint },
+  sunIcon:   { fontSize:20, marginBottom:2 },
+  sunTime:   { fontSize:18, fontWeight:'500', color:C.goldLight, letterSpacing:0.5 },
+  sunLabelBig:{ fontSize:9, color:C.muted, marginTop:1, textTransform:'uppercase', letterSpacing:1 },
   srcLabel:  { fontSize:11, color:C.faint, textAlign:'center', paddingVertical:6, backgroundColor:C.bgDeep, borderBottomWidth:0.5, borderColor:C.borderFaint },
 });
 
@@ -584,11 +648,16 @@ const td = StyleSheet.create({
 });
 
 const s = StyleSheet.create({
-  svaraCard:    { margin:16, marginBottom:10, backgroundColor:C.bgCard, borderRadius:14, borderWidth:0.5, borderColor:C.border, paddingVertical:12, paddingHorizontal:16, alignItems:'center' },
-  svaraLabel:   { fontSize:11, color:C.muted, textTransform:'uppercase', letterSpacing:1, marginBottom:4 },
-  svaraName:    { fontSize:18, fontWeight:'500', color:C.gold },
-  badge:        { marginTop:6, paddingVertical:4, paddingHorizontal:14, borderRadius:20, backgroundColor:C.purple, borderWidth:0.5, borderColor:C.purpleBorder },
-  badgeText:    { fontSize:12, color:C.gold },
+  svaraCard:    { margin:16, marginBottom:12, backgroundColor:C.bgCard, borderRadius:16, borderWidth:1, borderColor:C.gold, paddingVertical:20, paddingHorizontal:16, alignItems:'center' },
+  svaraLabel:   { fontSize:12, color:C.muted, textTransform:'uppercase', letterSpacing:1.2, marginBottom:8 },
+  svaraName:    { fontSize:28, fontWeight:'500', color:C.gold, letterSpacing:0.5 },
+  badge:        { marginTop:10, paddingVertical:6, paddingHorizontal:16, borderRadius:20, backgroundColor:C.purple, borderWidth:0.5, borderColor:C.purpleBorder },
+  badgeText:    { fontSize:13, color:C.gold },
+  compareCard:  { marginHorizontal:16, marginBottom:12, backgroundColor:C.bgCard, borderRadius:12, borderWidth:0.5, borderColor:C.border, paddingVertical:12, paddingHorizontal:14, flexDirection:'row', alignItems:'center', justifyContent:'space-between' },
+  compareItem:  { flex:1, alignItems:'center' },
+  compareLabel: { fontSize:11, color:C.muted, textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 },
+  compareValue: { fontSize:14, fontWeight:'500', color:C.goldLight },
+  compareArrow: { fontSize:12, color:C.faint, marginHorizontal:8, fontStyle:'italic' },
   tattvaRow:    { flexDirection:'row', marginHorizontal:16, marginBottom:12, gap:6 },
   tattvaPill:   { flex:1, backgroundColor:C.bgCard, borderWidth:0.5, borderColor:C.border, borderRadius:12, paddingVertical:14, alignItems:'center' },
   tattvaPillActive:{ backgroundColor:C.purple, borderColor:C.gold },
