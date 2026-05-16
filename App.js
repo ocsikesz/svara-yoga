@@ -628,10 +628,12 @@ function InnerApp() {
     })();
   }, []);
 
-  // Watch for nadi and tattva changes, send notifications
-  const lastNadiRef   = useRef(null);
-  const lastTattvaRef = useRef(null);
-  const scheduledRef  = useRef(false);
+  // Watch for nadi and tattva changes, send notifications.
+  // Strategy: only fire notifications when the value ACTUALLY changes from the
+  // previously-seen-and-persisted value (across app restarts via AsyncStorage).
+  // No scheduling in advance — this avoids stale Android-queued notifications
+  // firing on app open.
+  const initRef = useRef(false);
 
   useEffect(() => {
     const TATTVA_INFO = {
@@ -647,66 +649,38 @@ function InnerApp() {
       sushumna: { emoji:'🔥', name:'Sushumna' },
     };
 
-    // Schedule future notifications for the next 12 hours so they fire even when the app is closed.
-    // We re-run this whenever sunriseMin, isGhatika or the toggles change.
-    const scheduleFuture = async () => {
+    let cancelled = false;
+    let lastNadi = null;
+    let lastTattva = null;
+
+    // 1) On first run after app start: clear any leftover queued notifications,
+    //    and load the previous nadi/tattva that the user last *saw*.
+    const init = async () => {
+      try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
       try {
-        await Notifications.cancelAllScheduledNotificationsAsync();
-        const now = new Date();
-        const nowMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
-        const sr = config.sunriseMin;
-        const cycleDur = isGhatika ? 120 : 60;
-        const seq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
-        let lastT = getTattvaFromSunrise(sr, isGhatika).id;
-        const l0 = getLunarDay();
-        let lastN = getSvaraFromSunrise(sr, l0.day, l0.paksha);
-        // Scan next 12 hours at 1-minute resolution
-        for (let dm = 1; dm <= 720; dm++) {
-          const futureMin = nowMin + dm;
-          // compute future tattva
-          const mFromSR = futureMin - sr;
-          let t;
-          if (mFromSR < 0) t = seq[0];
-          else {
-            const pos = mFromSR % cycleDur;
-            let e = 0;
-            t = seq[seq.length-1];
-            for (const x of seq) { e += isGhatika ? x.ghatika : x.classic; if (pos < e) { t = x; break; } }
-          }
-          // compute future nadi (changes at sunrise based on lunar day)
-          const futureDate = new Date(now.getTime() + dm*60000);
-          // approximation: nadi changes at sunrise; we use today's lunar day
-          const fl = getLunarDay();
-          const futureNadi = getSvaraFromSunrise(sr, fl.day, fl.paksha);
-          if (t.id !== lastT && config.notifs?.tattva) {
-            const ti = TATTVA_INFO[t.id];
-            const ni = NADI_INFO[futureNadi];
-            await Notifications.scheduleNotificationAsync({
-              content: { title: `${ti.emoji} ${ti.name.split(' ')[0]} · ${ni.emoji} ${ni.name}`, body: t.name+' is now active', sound:true },
-              trigger: { seconds: dm*60 },
-            });
-            lastT = t.id;
-          }
-          if (futureNadi !== lastN && config.notifs?.nadi) {
-            const ni = NADI_INFO[futureNadi];
-            const ti = TATTVA_INFO[t.id];
-            await Notifications.scheduleNotificationAsync({
-              content: { title: `${ni.emoji} ${ni.name} · ${ti.emoji} ${ti.name.split(' ')[0]}`, body: ni.name+' nadi is now active', sound:true },
-              trigger: { seconds: dm*60 },
-            });
-            lastN = futureNadi;
+        const raw = await AsyncStorage.getItem('lastSeen');
+        if (raw) {
+          const obj = JSON.parse(raw);
+          if (obj && typeof obj === 'object') {
+            lastNadi   = obj.nadi   || null;
+            lastTattva = obj.tattva || null;
           }
         }
       } catch(e) {}
+      initRef.current = true;
     };
 
-    // Foreground tick: catch transitions live (also shows notif if app is open)
     const tick = async () => {
+      if (cancelled) return;
+      if (!initRef.current) { await init(); }
       try {
         const l = getLunarDay();
-        const currentNadi = getSvaraFromSunrise(config.sunriseMin, l.day, l.paksha);
+        const currentNadi   = getSvaraFromSunrise(config.sunriseMin, l.day, l.paksha);
         const currentTattva = getTattvaFromSunrise(config.sunriseMin, isGhatika).id;
-        if (lastNadiRef.current !== null && currentNadi !== lastNadiRef.current && config.notifs?.nadi) {
+
+        // Fire only when value really changed AND we have a previous value
+        // (lastNadi/lastTattva are loaded from storage so this survives restarts)
+        if (lastNadi !== null && currentNadi !== lastNadi && config.notifs?.nadi) {
           const ni = NADI_INFO[currentNadi];
           const ti = TATTVA_INFO[currentTattva];
           await Notifications.scheduleNotificationAsync({
@@ -714,7 +688,7 @@ function InnerApp() {
             trigger: null,
           });
         }
-        if (lastTattvaRef.current !== null && currentTattva !== lastTattvaRef.current && config.notifs?.tattva) {
+        if (lastTattva !== null && currentTattva !== lastTattva && config.notifs?.tattva) {
           const ni = NADI_INFO[currentNadi];
           const ti = TATTVA_INFO[currentTattva];
           await Notifications.scheduleNotificationAsync({
@@ -722,15 +696,21 @@ function InnerApp() {
             trigger: null,
           });
         }
-        lastNadiRef.current = currentNadi;
-        lastTattvaRef.current = currentTattva;
+
+        // Persist the just-seen values so next restart knows them
+        if (currentNadi !== lastNadi || currentTattva !== lastTattva) {
+          lastNadi = currentNadi;
+          lastTattva = currentTattva;
+          try {
+            await AsyncStorage.setItem('lastSeen', JSON.stringify({ nadi:lastNadi, tattva:lastTattva }));
+          } catch(e) {}
+        }
       } catch(e) {}
     };
 
     tick();
-    scheduleFuture();
     const id = setInterval(tick, 10000);
-    return () => clearInterval(id);
+    return () => { cancelled = true; clearInterval(id); };
   }, [config.sunriseMin, isGhatika, config.notifs?.nadi, config.notifs?.tattva]);
 
   const screens = {
