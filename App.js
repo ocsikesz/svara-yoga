@@ -594,7 +594,19 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
               <Text style={s.settingTitle}>{useManualTime?'✏️  Manual sunrise':'🌐  Auto (calculated)'}</Text>
               <Text style={s.settingSub}>{useManualTime?'Type your own sunrise/sunset times':'Calculated from your coordinates using SunCalc'}</Text>
             </View>
-            <Switch value={useManualTime} onValueChange={setUseManualTime} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={useManualTime?C.gold:'#6a4a8a'}/>
+            <Switch value={useManualTime} onValueChange={(v)=>{
+              if (v) {
+                // Switching from Auto to Manual: pre-fill the fields with current calculated values
+                const latN = parseFloat(lat) || config.lat;
+                const lngN = parseFloat(lng) || config.lng;
+                const calc = calcSunrise(latN, lngN);
+                const [srHh, srMm] = calc.sunriseStr.split(':');
+                const [ssHh, ssMm] = calc.sunsetStr.split(':');
+                setSrH(srHh); setSrM(srMm);
+                setSsH(ssHh); setSsM(ssMm);
+              }
+              setUseManualTime(v);
+            }} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={useManualTime?C.gold:'#6a4a8a'}/>
           </View>
           {!useManualTime && (
             <View style={{padding:14,borderTopWidth:0.5,borderColor:'#3a1a5a'}}>
@@ -602,6 +614,21 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
             </View>
           )}
           {useManualTime && <>
+            <View style={ss.useCalcRow}>
+              <Text style={{fontSize:12,color:C.muted,flex:1}}>From SunCalc: 🌅 {config.sunriseStr}  ·  🌇 {config.sunsetStr}</Text>
+              <TouchableOpacity onPress={() => {
+                // Compute fresh values from current lat/lng (or fallback to config)
+                const latN = parseFloat(lat) || config.lat;
+                const lngN = parseFloat(lng) || config.lng;
+                const calc = calcSunrise(latN, lngN);
+                const [srHh, srMm] = calc.sunriseStr.split(':');
+                const [ssHh, ssMm] = calc.sunsetStr.split(':');
+                setSrH(srHh); setSrM(srMm);
+                setSsH(ssHh); setSsM(ssMm);
+              }} style={ss.useCalcBtn}>
+                <Text style={{fontSize:12,color:C.gold,fontWeight:'500'}}>⤴ Use calculated</Text>
+              </TouchableOpacity>
+            </View>
             <View style={ss.inputRow}><View style={{flex:1}}><Text style={s.settingTitle}>Sunrise (HH:MM)</Text></View><View style={ss.timeRow}><TextInput style={[ss.input,ss.timePart]} value={srH} onChangeText={setSrH} keyboardType="numeric" maxLength={2}/><Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>:</Text><TextInput style={[ss.input,ss.timePart]} value={srM} onChangeText={setSrM} keyboardType="numeric" maxLength={2}/></View></View>
             <View style={[ss.inputRow,{borderBottomWidth:0}]}><View style={{flex:1}}><Text style={s.settingTitle}>Sunset (HH:MM)</Text></View><View style={ss.timeRow}><TextInput style={[ss.input,ss.timePart]} value={ssH} onChangeText={setSsH} keyboardType="numeric" maxLength={2}/><Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>:</Text><TextInput style={[ss.input,ss.timePart]} value={ssM} onChangeText={setSsM} keyboardType="numeric" maxLength={2}/></View></View>
           </>}
@@ -1079,6 +1106,8 @@ const ss = StyleSheet.create({
   modeBtnInline:{ backgroundColor:C.bg, borderWidth:0.5, borderColor:C.gold, borderRadius:10, paddingVertical:10, alignItems:'center' },
   manualRow:    { flexDirection:'row', alignItems:'center', justifyContent:'space-between', paddingVertical:8 },
   manualLabel:  { fontSize:14, color:C.goldLight, flex:1 },
+  useCalcRow:   { flexDirection:'row', alignItems:'center', padding:12, paddingHorizontal:16, borderTopWidth:0.5, borderBottomWidth:0.5, borderColor:'#3a1a5a', gap:10 },
+  useCalcBtn:   { paddingVertical:6, paddingHorizontal:12, borderRadius:8, backgroundColor:C.purple, borderWidth:0.5, borderColor:C.gold },
   inputRow:     { flexDirection:'row', alignItems:'center', justifyContent:'space-between', padding:14, paddingHorizontal:16, borderBottomWidth:0.5, borderColor:'#3a1a5a' },
   input:        { backgroundColor:C.bg, borderWidth:0.5, borderColor:C.border, borderRadius:8, color:C.gold, fontSize:15, paddingVertical:8, paddingHorizontal:12, minWidth:100, textAlign:'right' },
   timeRow:      { flexDirection:'row', alignItems:'center', gap:4 },
