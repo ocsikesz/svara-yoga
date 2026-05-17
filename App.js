@@ -350,67 +350,38 @@ function LunarScreen() {
   const { day, paksha } = getLunarDay();
   const [selectedDay, setSelectedDay] = useState(day);
 
-  // Build "today + next 2 days" forecast
-  const buildDay = (offset) => {
-    const future = new Date(Date.now() + offset*86400000);
-    const dayInMonth = Math.floor((future - new Date(2024,5,6))/86400000);
-    const dInCycle = ((dayInMonth % 30) + 30) % 30;
-    const fPaksha = dInCycle < 15 ? 'shukla' : 'krishna';
-    const fTithi  = (dInCycle % 15) + 1;
-    const entry   = LUNAR_DAYS.find(x => x.day === fTithi) || LUNAR_DAYS[0];
-    const labels  = ['Today','Tomorrow','In 2 days'];
-    return { offset, paksha:fPaksha, tithi:fTithi, entry, dateLabel:labels[offset], date:future };
-  };
-  const forecast = [buildDay(0), buildDay(1), buildDay(2)];
+  const detail   = LUNAR_DAYS.find(x => x.day === selectedDay) || LUNAR_DAYS[0];
+  const nextDay  = (selectedDay % 15) + 1;
+  const nextDetail = LUNAR_DAYS.find(x => x.day === nextDay) || LUNAR_DAYS[0];
 
-  // Selected detail (either from forecast or grid tap)
-  const detail = LUNAR_DAYS.find(x => x.day === selectedDay) || LUNAR_DAYS[0];
+  const renderCard = (d, label, isToday) => (
+    <View style={[s.card,{borderColor:d.nadi==='ida'?'#2a4a7a':'#6a3a1a',borderWidth:1}]}>
+      <Text style={{fontSize:12,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{label}</Text>
+      <Text style={{fontSize:20,color:C.gold,fontWeight:'500',marginBottom:4}}>{d.emoji}  {d.name}</Text>
+      <Text style={{fontSize:14,color:d.nadi==='ida'?C.blue:C.orange,marginBottom:10,fontStyle:'italic'}}>{d.meaning}</Text>
+      <Text style={{fontSize:13,color:C.muted,marginBottom:10}}>{d.nadi==='ida'?'🌙 Ida Nadi dominates · cool, lunar energy':'☀️ Pingala Nadi dominates · warm, solar energy'}</Text>
+      <View style={{flexDirection:'row',gap:10}}>
+        <View style={[s.lunarDDBox,{backgroundColor:C.greenBg,borderColor:C.greenBorder}]}>
+          <Text style={{fontSize:11,color:C.green,fontWeight:'500',marginBottom:4}}>✓ FAVOR</Text>
+          {d.favor.map((x,i)=><Text key={i} style={{fontSize:12,color:'#7ac0a0',lineHeight:18}}>• {x}</Text>)}
+        </View>
+        <View style={[s.lunarDDBox,{backgroundColor:C.redBg,borderColor:C.redBorder}]}>
+          <Text style={{fontSize:11,color:C.red,fontWeight:'500',marginBottom:4}}>✕ AVOID</Text>
+          {d.avoid.map((x,i)=><Text key={i} style={{fontSize:12,color:'#c08080',lineHeight:18}}>• {x}</Text>)}
+        </View>
+      </View>
+    </View>
+  );
 
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <View style={s.screenHeader}><Text style={s.screenTitle}>Lunar Cycle Guide</Text><Text style={s.screenDesc}>Tithi · Nadi · Practice</Text></View>
+      <View style={s.screenHeader}><Text style={s.screenTitle}>Lunar Cycle Guide</Text><Text style={s.screenDesc}>Tithi · Nadi · Practice  ·  tap any day below</Text></View>
 
       <View style={s.card}>
-        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-          <View><Text style={{fontSize:13,color:C.muted}}>Current Paksha</Text><Text style={{fontSize:18,color:C.gold,fontWeight:'500',marginTop:2}}>{paksha==='shukla'?'Shukla · Waxing':'Krishna · Waning'}</Text></View>
-          <Text style={{fontSize:40}}>{paksha==='shukla'?'🌙':'🌑'}</Text>
-        </View>
-      </View>
-
-      <Text style={[s.sectionLabel,{marginHorizontal:16,marginTop:6,marginBottom:8}]}>📅  3-Day Forecast</Text>
-      {forecast.map(f => (
-        <View key={f.offset} style={[s.lunarDayCard,{borderColor:f.entry.nadi==='ida'?'#2a4a7a':'#6a3a1a'}]}>
-          <View style={s.lunarDayHeader}>
-            <View>
-              <Text style={s.lunarDayLabel}>{f.dateLabel}  ·  {f.date.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'})}</Text>
-              <Text style={s.lunarDayTitle}>{f.entry.emoji}  {f.entry.name}  ·  Day {f.tithi}</Text>
-              <Text style={[s.lunarDayMeaning,{color:f.entry.nadi==='ida'?C.blue:C.orange}]}>{f.entry.meaning}</Text>
-            </View>
-          </View>
-          <View style={s.lunarDayNadi}>
-            <Text style={{fontSize:13,color:f.entry.nadi==='ida'?C.blue:C.orange,fontWeight:'500'}}>
-              {f.entry.nadi==='ida'?'🌙 Ida (Left) dominates':'☀️ Pingala (Right) dominates'}
-            </Text>
-            <Text style={{fontSize:11,color:C.muted,marginTop:2}}>{f.paksha==='shukla'?'Shukla Paksha':'Krishna Paksha'}</Text>
-          </View>
-          <View style={{flexDirection:'row',gap:10,marginTop:10}}>
-            <View style={[s.lunarDDBox,{backgroundColor:C.greenBg,borderColor:C.greenBorder}]}>
-              <Text style={{fontSize:11,color:C.green,fontWeight:'500',marginBottom:4}}>✓ FAVOR</Text>
-              {f.entry.favor.slice(0,3).map((d,i)=><Text key={i} style={{fontSize:12,color:'#7ac0a0',lineHeight:18}}>• {d}</Text>)}
-            </View>
-            <View style={[s.lunarDDBox,{backgroundColor:C.redBg,borderColor:C.redBorder}]}>
-              <Text style={{fontSize:11,color:C.red,fontWeight:'500',marginBottom:4}}>✕ AVOID</Text>
-              {f.entry.avoid.slice(0,3).map((d,i)=><Text key={i} style={{fontSize:12,color:'#c08080',lineHeight:18}}>• {d}</Text>)}
-            </View>
-          </View>
-        </View>
-      ))}
-
-      <Text style={[s.sectionLabel,{marginHorizontal:16,marginTop:14,marginBottom:8}]}>🌙  All 15 Tithis  ·  tap any day</Text>
-      <View style={[s.card,{marginTop:0}]}>
         <View style={{flexDirection:'row',gap:14,marginBottom:10}}>
           <Text style={{fontSize:12,color:C.blue}}>🔵 Ida</Text>
           <Text style={{fontSize:12,color:C.orange}}>🟠 Pingala</Text>
+          <Text style={{fontSize:12,color:C.gold,marginLeft:'auto'}}>● Today: {paksha==='shukla'?'Shukla':'Krishna'} {day}</Text>
         </View>
         <View style={{flexDirection:'row',flexWrap:'wrap',gap:5}}>
           {LUNAR_DAYS.map(d=>(
@@ -423,28 +394,14 @@ function LunarScreen() {
                 d.day===day&&{borderWidth:2,borderColor:C.gold},
                 d.day===selectedDay&&d.day!==day&&{borderWidth:2,borderColor:C.goldLight},
               ]}>
-              <Text style={{fontSize:12,fontWeight:'500',color:d.nadi==='ida'?C.blue:C.orange}}>{d.day}</Text>
+              <Text style={{fontSize:13,fontWeight:'500',color:d.nadi==='ida'?C.blue:C.orange}}>{d.day}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      <View style={[s.card,{borderColor:detail.nadi==='ida'?'#2a4a7a':'#6a3a1a',borderWidth:1}]}>
-        <Text style={{fontSize:12,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{selectedDay===day?'Selected · Today':'Selected · Day '+selectedDay}</Text>
-        <Text style={{fontSize:18,color:C.gold,fontWeight:'500',marginBottom:4}}>{detail.emoji}  {detail.name}</Text>
-        <Text style={{fontSize:14,color:detail.nadi==='ida'?C.blue:C.orange,marginBottom:10,fontStyle:'italic'}}>{detail.meaning}</Text>
-        <Text style={{fontSize:13,color:C.muted,marginBottom:6}}>{detail.nadi==='ida'?'🌙 Ida Nadi dominates · cool, lunar energy':'☀️ Pingala Nadi dominates · warm, solar energy'}</Text>
-        <View style={{flexDirection:'row',gap:10,marginTop:8}}>
-          <View style={[s.lunarDDBox,{backgroundColor:C.greenBg,borderColor:C.greenBorder}]}>
-            <Text style={{fontSize:11,color:C.green,fontWeight:'500',marginBottom:4}}>✓ FAVOR</Text>
-            {detail.favor.map((d,i)=><Text key={i} style={{fontSize:12,color:'#7ac0a0',lineHeight:18}}>• {d}</Text>)}
-          </View>
-          <View style={[s.lunarDDBox,{backgroundColor:C.redBg,borderColor:C.redBorder}]}>
-            <Text style={{fontSize:11,color:C.red,fontWeight:'500',marginBottom:4}}>✕ AVOID</Text>
-            {detail.avoid.map((d,i)=><Text key={i} style={{fontSize:12,color:'#c08080',lineHeight:18}}>• {d}</Text>)}
-          </View>
-        </View>
-      </View>
+      {renderCard(detail, selectedDay===day ? '● Selected · Today' : '● Selected · Day '+selectedDay, selectedDay===day)}
+      {renderCard(nextDetail, '▶ Next · Day '+nextDay, false)}
     </ScrollView>
   );
 }
