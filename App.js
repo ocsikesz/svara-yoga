@@ -490,15 +490,12 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
   };
 
   const handleApply = async () => {
-    let latN = parseFloat(lat) || config.lat;
-    let lngN = parseFloat(lng) || config.lng;
-    let cityName = city;
-
-    // For 'auto' or 'gps-once' modes when applying, get fresh GPS now
-    if (mode === 'auto' || mode === 'gps-once') {
-      const gps = await fetchGPS();
-      if (gps) { latN = gps.latN; lngN = gps.lngN; cityName = gps.newCity; }
-    }
+    // Use whatever lat/lng/city are currently in the input state — these were
+    // already set by the GPS card on selection or by user typing. NO GPS re-fetch
+    // here; that's what makes Apply instant.
+    const latN = parseFloat(lat) || config.lat;
+    const lngN = parseFloat(lng) || config.lng;
+    const cityName = city || 'Current Location';
 
     let sunriseMin, sunsetMin, sunriseStr, sunsetStr;
     if (useManualTime) {
@@ -519,16 +516,16 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
       notifs,
     };
     setConfig(newConfig);
-    try {
-      // Persist the whole config in one place so ALL settings survive a restart:
-      // manual sunrise time, manual coords, location mode, sunrise mode, notif prefs.
-      // Also preserve isGhatika which is owned by InnerApp.
-      const existing = await AsyncStorage.getItem('appConfig');
-      const merged = { ...(existing ? JSON.parse(existing) : {}), ...newConfig };
-      await AsyncStorage.setItem('appConfig', JSON.stringify(merged));
-    } catch(e) {}
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
+    // Persist in background (don't await — UI updates immediately)
+    (async () => {
+      try {
+        const existing = await AsyncStorage.getItem('appConfig');
+        const merged = { ...(existing ? JSON.parse(existing) : {}), ...newConfig };
+        await AsyncStorage.setItem('appConfig', JSON.stringify(merged));
+      } catch(e) {}
+    })();
   };
 
   const ModeCard = ({id, icon, title, subtitle, children}) => {
@@ -856,16 +853,16 @@ function InnerApp() {
   //   only ours, not user-test ones.
   useEffect(() => {
     const TATTVA_INFO = {
-      prithvi: { emoji:'🌍', name:'Prithvi (Earth)' },
-      apas:    { emoji:'💧', name:'Apas (Water)' },
-      tejas:   { emoji:'🔥', name:'Tejas (Fire)' },
-      vayu:    { emoji:'🌬', name:'Vayu (Air)' },
-      akasha:  { emoji:'✨', name:'Akasha (Ether)' },
+      prithvi: { emoji:'🌍', name:'Prithvi', desc:'Earth · stable, grounding. Good for steady work.' },
+      apas:    { emoji:'💧', name:'Apas',    desc:'Water · flowing, creative. Good for art & study.' },
+      tejas:   { emoji:'🔥', name:'Tejas',   desc:'Fire · intense, transformative. Avoid new starts.' },
+      vayu:    { emoji:'🌬', name:'Vayu',    desc:'Air · movement, change. Good for travel & exchange.' },
+      akasha:  { emoji:'✨', name:'Akasha',  desc:'Ether · transcendent, vast. Best for meditation.' },
     };
     const NADI_INFO = {
-      ida:      { emoji:'🌙', name:'Ida' },
-      pingala:  { emoji:'☀️', name:'Pingala' },
-      sushumna: { emoji:'🔥', name:'Sushumna' },
+      ida:      { emoji:'🌙', name:'Ida',      desc:'Left nostril · lunar, cooling. Calm, healing tasks.' },
+      pingala:  { emoji:'☀️', name:'Pingala',  desc:'Right nostril · solar, warming. Action, courage.' },
+      sushumna: { emoji:'🔥', name:'Sushumna', desc:'Both equal · sacred, rare. Sit for meditation now.' },
     };
 
     const scheduleAll = async () => {
@@ -886,11 +883,14 @@ function InnerApp() {
         const lunarNow = getLunarDay();
         const startNadi = (LUNAR_DAYS.find(d => d.day === lunarNow.day) || LUNAR_DAYS[0]).nadi;
 
-        // Helper: compute nadi at a given offset (minutes from now)
+        // Helper: compute nadi at a given offset (minutes from now).
+        // Nadi alternates every 60 min in a 120-min cycle, all day long (24h).
+        // Sushumna appears for 2 min at each transition (minute 0, 60, 120, ...).
         const nadiAt = (offsetMin) => {
           const minFromSR = nowMin + offsetMin - sr;
-          if (minFromSR < 0 || minFromSR > 720) return 'sushumna';
-          const cyclePos = minFromSR % 120;
+          // Use modulo so cycle continues past 12h
+          const adjusted = ((minFromSR % 1440) + 1440) % 1440;
+          const cyclePos = adjusted % 120;
           if (cyclePos < 2 || (cyclePos >= 60 && cyclePos < 62)) return 'sushumna';
           if (cyclePos < 60) return startNadi;
           return startNadi === 'ida' ? 'pingala' : 'ida';
@@ -908,6 +908,8 @@ function InnerApp() {
 
         // Build list of TATTVA and NADI transitions in the next 24h.
         // Walk minute-by-minute, detect when value changes from previous.
+        // Skip the first 2 minutes — those may already have fired (or be just about
+        // to fire), and re-scheduling them creates duplicate "ghost" notifications.
         const txs = []; // {dm, type:'tattva'|'nadi', toId}
         let lastTat = tattvaAt(0).id;
         let lastNadi = nadiAt(0);
@@ -915,14 +917,14 @@ function InnerApp() {
           if (config.notifs?.tattva) {
             const t = tattvaAt(dm).id;
             if (t !== lastTat) {
-              txs.push({ dm, type:'tattva', toId: t });
+              if (dm >= 2) txs.push({ dm, type:'tattva', toId: t });
               lastTat = t;
             }
           }
           if (config.notifs?.nadi) {
             const n = nadiAt(dm);
             if (n !== lastNadi) {
-              txs.push({ dm, type:'nadi', toId: n });
+              if (dm >= 2) txs.push({ dm, type:'nadi', toId: n });
               lastNadi = n;
             }
           }
@@ -948,8 +950,8 @@ function InnerApp() {
             if (!ti) continue;
             await Notifications.scheduleNotificationAsync({
               content: {
-                title: `${ti.emoji}  ${ti.name.split(' ')[0]} active`,
-                body:  `Tattva changed to ${ti.name}`,
+                title: `${ti.emoji}  ${ti.name}`,
+                body:  ti.desc,
                 sound: true,
                 data:  { kind:'svara-tx' },
                 ...androidFields,
@@ -961,8 +963,8 @@ function InnerApp() {
             if (!ni) continue;
             await Notifications.scheduleNotificationAsync({
               content: {
-                title: `${ni.emoji}  ${ni.name} active`,
-                body:  `${ni.name} nadi is now flowing`,
+                title: `${ni.emoji}  ${ni.name}`,
+                body:  ni.desc,
                 sound: true,
                 data:  { kind:'svara-tx' },
                 ...androidFields,
