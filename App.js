@@ -60,21 +60,21 @@ const SHLOKAS = [
 ];
 
 const LUNAR_DAYS = [
-  {day:1,  nadi:'ida',     name:'Pratipada',  emoji:'🌑',  meaning:'Beginning · new intention', favor:['Plant intentions','Begin new study','Light cleansing'], avoid:['Heavy work','Travel','Major decisions']},
-  {day:2,  nadi:'ida',     name:'Dwitiya',    emoji:'🌒',  meaning:'Growth · gentle expansion', favor:['Build relationships','Learn skills','Cook & nourish'], avoid:['Conflict','Long journeys']},
-  {day:3,  nadi:'ida',     name:'Tritiya',    emoji:'🌒',  meaning:'Auspicious · sacred work',  favor:['Sacred art','Music','Spiritual study','Marriage rites'], avoid:['Surgery','Disputes']},
-  {day:4,  nadi:'pingala', name:'Chaturthi',  emoji:'🌓',  meaning:'Obstacle · honor Ganesha',  favor:['Remove obstacles','Worship Ganesha','Inner work'], avoid:['Major launches','Travel south']},
-  {day:5,  nadi:'pingala', name:'Panchami',   emoji:'🌓',  meaning:'Wisdom · serpent power',    favor:['Knowledge work','Mantras','Snake/Naga worship'], avoid:['Surgery on snakes/skin','Underground work']},
-  {day:6,  nadi:'pingala', name:'Shashthi',   emoji:'🌔',  meaning:'Skanda · warrior energy',   favor:['Courage tasks','Physical training','Health work'], avoid:['Travel','Risky ventures']},
-  {day:7,  nadi:'ida',     name:'Saptami',    emoji:'🌔',  meaning:'Sun-blessed · clear light', favor:['Health rituals','Solar mantras','Bright endeavors'], avoid:['Dark deeds','Hidden plans']},
-  {day:8,  nadi:'ida',     name:'Ashtami',    emoji:'🌔',  meaning:'Power · Durga energy',      favor:['Worship','Spiritual practice','Inner battles'], avoid:['Worldly business','Travel']},
-  {day:9,  nadi:'ida',     name:'Navami',     emoji:'🌕',  meaning:'Fierce · transformative',   favor:['Deep sadhana','Letting go','Goddess worship'], avoid:['Pleasures','Light socializing','Travel']},
-  {day:10, nadi:'pingala', name:'Dashami',    emoji:'🌕',  meaning:'Victory · success energy',  favor:['Travel north/east','Big decisions','Achievement'], avoid:['Defeatist thinking','Procrastination']},
-  {day:11, nadi:'pingala', name:'Ekadashi',   emoji:'🌕',  meaning:'Sacred fast · purification',favor:['Fast & meditate','Vishnu mantras','Yoga'], avoid:['Heavy food','Grains','Excess speech']},
-  {day:12, nadi:'pingala', name:'Dwadashi',   emoji:'🌖',  meaning:'Renewal · break fast',      favor:['Charity','Gentle eating','Service'], avoid:['Anger','Greed','Conflict']},
-  {day:13, nadi:'ida',     name:'Trayodashi', emoji:'🌖',  meaning:'Auspicious · attractive',   favor:['Beauty work','Arts','Diplomacy','Romance'], avoid:['Crude speech','Aggressive deals']},
-  {day:14, nadi:'ida',     name:'Chaturdashi',emoji:'🌗',  meaning:'Fierce · Shiva energy',     favor:['Tantric practice','Inner work','Shiva worship'], avoid:['Travel','Worldly ventures','Celebrations']},
-  {day:15, nadi:'pingala', name:'Purnima/Amavasya', emoji:'🌕', meaning:'Full/New Moon · turning point', favor:['Meditation','Ritual','Reflection','Charity'], avoid:['Major undertakings','Aggressive action','Heavy meals']},
+  {day:1,  nadi:'ida',     name:'Pratipada',  emoji:'🌑',  meaning:'Beginning · new intention', desc:'The first sliver of moon. A day to plant seeds of intention and gently begin new cycles. Energy is subtle but pure — best used for setting direction, not for force.', favor:['Plant intentions','Begin new study','Light cleansing'], avoid:['Heavy work','Travel','Major decisions']},
+  {day:2,  nadi:'ida',     name:'Dwitiya',    emoji:'🌒',  meaning:'Growth · gentle expansion', desc:'Lunar energy expands gently. Excellent for nurturing what was started yesterday — relationships, learning, food. Avoid harsh exchanges; the day is soft and impressionable.', favor:['Build relationships','Learn skills','Cook & nourish'], avoid:['Conflict','Long journeys']},
+  {day:3,  nadi:'ida',     name:'Tritiya',    emoji:'🌒',  meaning:'Auspicious · sacred work', desc:'One of the most blessed tithis for spiritual and sacred work. Marriages, sacred ceremonies, music, and devotion all flourish. Avoid surgery, conflict and harsh speech.', favor:['Sacred art','Music','Spiritual study','Marriage rites'], avoid:['Surgery','Disputes']},
+  {day:4,  nadi:'pingala', name:'Chaturthi',  emoji:'🌓',  meaning:'Obstacle · honor Ganesha', desc:'Sacred to Ganesha, remover of obstacles. Inner work and worship of Ganesha clear blockages, but launching new external projects today often meets resistance. Look inward.', favor:['Remove obstacles','Worship Ganesha','Inner work'], avoid:['Major launches','Travel south']},
+  {day:5,  nadi:'pingala', name:'Panchami',   emoji:'🌓',  meaning:'Wisdom · serpent power', desc:'Sacred to the Nagas (serpent forces) and to learning. A day for mantras, sacred study, and awakening kundalini-like energies. Avoid surgery, especially on snakes or skin.', favor:['Knowledge work','Mantras','Snake/Naga worship'], avoid:['Surgery on snakes/skin','Underground work']},
+  {day:6,  nadi:'pingala', name:'Shashthi',   emoji:'🌔',  meaning:'Skanda · warrior energy', desc:'Sacred to Skanda/Kartikeya, the celestial warrior. Strong day for courage, physical training, healing, and protective rituals. Travel and risky ventures are less favored.', favor:['Courage tasks','Physical training','Health work'], avoid:['Travel','Risky ventures']},
+  {day:7,  nadi:'ida',     name:'Saptami',    emoji:'🌔',  meaning:'Sun-blessed · clear light', desc:'Solar-blessed day with clarity and bright energy. Excellent for health work, solar practices, and any endeavor done openly. Hidden or shadowy work meets exposure.', favor:['Health rituals','Solar mantras','Bright endeavors'], avoid:['Dark deeds','Hidden plans']},
+  {day:8,  nadi:'ida',     name:'Ashtami',    emoji:'🌔',  meaning:'Power · Durga energy', desc:'Sacred to Durga, the fierce protective Mother. A day of inner power. Spiritual practice and inner battles are favored; worldly business and travel are less so.', favor:['Worship','Spiritual practice','Inner battles'], avoid:['Worldly business','Travel']},
+  {day:9,  nadi:'ida',     name:'Navami',     emoji:'🌕',  meaning:'Fierce · transformative', desc:'Highly transformative tithi. Deep sadhana, letting go of old patterns, and goddess worship are powerful. Avoid worldly pleasures, light socializing and journeys today.', favor:['Deep sadhana','Letting go','Goddess worship'], avoid:['Pleasures','Light socializing','Travel']},
+  {day:10, nadi:'pingala', name:'Dashami',    emoji:'🌕',  meaning:'Victory · success energy', desc:'Tithi of victory and momentum. Strong support for achievement, travel north or east, and large decisions. Procrastination and self-doubt weigh more heavily today.', favor:['Travel north/east','Big decisions','Achievement'], avoid:['Defeatist thinking','Procrastination']},
+  {day:11, nadi:'pingala', name:'Ekadashi',   emoji:'🌕',  meaning:'Sacred fast · purification', desc:'The most sacred fasting day in Hindu tradition. Vishnu mantras, fasting (especially from grains), meditation and yoga purify deeply. Avoid heavy food and excess speech.', favor:['Fast & meditate','Vishnu mantras','Yoga'], avoid:['Heavy food','Grains','Excess speech']},
+  {day:12, nadi:'pingala', name:'Dwadashi',   emoji:'🌖',  meaning:'Renewal · break fast', desc:'The day to gently break the Ekadashi fast and reset. Charity, service, and soft eating bring blessings. Anger, greed, and conflict undo the purification gained yesterday.', favor:['Charity','Gentle eating','Service'], avoid:['Anger','Greed','Conflict']},
+  {day:13, nadi:'ida',     name:'Trayodashi', emoji:'🌖',  meaning:'Auspicious · attractive', desc:'A beautiful, harmonious day. Beauty, art, diplomacy, romance, and gentle negotiation flow naturally. Crude speech and aggressive deal-making clash with the energy.', favor:['Beauty work','Arts','Diplomacy','Romance'], avoid:['Crude speech','Aggressive deals']},
+  {day:14, nadi:'ida',     name:'Chaturdashi',emoji:'🌗',  meaning:'Fierce · Shiva energy', desc:'Sacred to Shiva in his fierce form. Deep tantric practice, inner alchemy, and Shiva worship are powerful. Avoid travel, celebrations, and worldly ventures today.', favor:['Tantric practice','Inner work','Shiva worship'], avoid:['Travel','Worldly ventures','Celebrations']},
+  {day:15, nadi:'pingala', name:'Purnima/Amavasya', emoji:'🌕', meaning:'Full/New Moon · turning point', desc:'The peak of the half-cycle (Full Moon in Shukla, New Moon in Krishna). A turning point — pause, meditate, reflect, give charity. Major undertakings and heavy meals work against this stillness.', favor:['Meditation','Ritual','Reflection','Charity'], avoid:['Major undertakings','Aggressive action','Heavy meals']},
 ];
 
 // ── RECOMMENDATIONS MATRIX (Nadi × Tattva = 15 combinations) ──────────────────
@@ -359,6 +359,7 @@ function LunarScreen() {
       <Text style={{fontSize:12,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{label}</Text>
       <Text style={{fontSize:20,color:C.gold,fontWeight:'500',marginBottom:4}}>{d.emoji}  {d.name}</Text>
       <Text style={{fontSize:14,color:d.nadi==='ida'?C.blue:C.orange,marginBottom:10,fontStyle:'italic'}}>{d.meaning}</Text>
+      {d.desc && <Text style={{fontSize:13,color:'#a08ab0',lineHeight:20,marginBottom:10}}>{d.desc}</Text>}
       <Text style={{fontSize:13,color:C.muted,marginBottom:10}}>{d.nadi==='ida'?'🌙 Ida Nadi dominates · cool, lunar energy':'☀️ Pingala Nadi dominates · warm, solar energy'}</Text>
       <View style={{flexDirection:'row',gap:10}}>
         <View style={[s.lunarDDBox,{backgroundColor:C.greenBg,borderColor:C.greenBorder}]}>
@@ -436,6 +437,8 @@ function ShlokasScreen() {
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
+  // Mode = 'auto' (GPS on every app open) | 'gps-once' (GPS now, fixed) | 'manual' (typed)
+  const [mode,    setMode]    = useState(config.locationMode === 'auto' ? 'auto' : config.locationMode === 'gps' ? 'gps-once' : 'manual');
   const [city,    setCity]    = useState(config.city);
   const [lat,     setLat]     = useState(String(config.lat));
   const [lng,     setLng]     = useState(String(config.lng));
@@ -443,23 +446,21 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
   const [srM,     setSrM]     = useState(String(config.srM).padStart(2,'0'));
   const [ssH,     setSsH]     = useState(String(config.ssH).padStart(2,'0'));
   const [ssM,     setSsM]     = useState(String(config.ssM).padStart(2,'0'));
-  const [locMode, setLocMode] = useState(config.locationMode);
-  const [srMode,  setSrMode]  = useState(config.sunriseMode);
+  const [useManualTime, setUseManualTime] = useState(config.sunriseMode === 'manual');
   const [notifs,  setNotifs]  = useState(config.notifs || {nadi:true,tattva:true});
   const [gpsLoad, setGpsLoad] = useState(false);
   const [saved,   setSaved]   = useState(false);
   const toggleNotif = k => setNotifs(n=>({...n,[k]:!n[k]}));
-
   const ghSeq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
 
-  const getGPS = async () => {
+  const fetchGPS = async () => {
     setGpsLoad(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setGpsLoad(false);
-        Alert.alert('Permission denied','Location permission is required to detect sunrise from your position.');
-        return;
+        Alert.alert('Permission denied','Please enable location for Svara Yoga in your phone settings.');
+        return null;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const latN = loc.coords.latitude;
@@ -471,37 +472,31 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
           newCity = geo[0].city || geo[0].district || geo[0].region || 'Current Location';
         }
       } catch(e) {}
-      const newLat = latN.toFixed(4);
-      const newLng = lngN.toFixed(4);
-      setLat(newLat); setLng(newLng); setCity(newCity);
-      setLocMode('gps');
-      // Auto-apply: recalculate sunrise/sunset and save config + persist to storage
-      let sunriseMin, sunsetMin, sunriseStr, sunsetStr;
-      if (srMode==='manual') {
-        sunriseMin = parseInt(srH)*60+parseInt(srM);
-        sunsetMin  = parseInt(ssH)*60+parseInt(ssM);
-        sunriseStr = `${srH}:${srM}`; sunsetStr = `${ssH}:${ssM}`;
-      } else {
-        const calc = calcSunrise(latN,lngN);
-        sunriseMin=calc.sunriseMin; sunsetMin=calc.sunsetMin;
-        sunriseStr=calc.sunriseStr; sunsetStr=calc.sunsetStr;
-      }
-      const newConfig = { city:newCity, lat:latN, lng:lngN, srH:parseInt(srH), srM:parseInt(srM), ssH:parseInt(ssH), ssM:parseInt(ssM), sunriseMin, sunsetMin, sunriseStr, sunsetStr, locationMode:'gps', sunriseMode:srMode, notifs };
-      setConfig(newConfig);
-      try { await AsyncStorage.setItem('lastGPS', JSON.stringify({lat:latN, lng:lngN, city:newCity})); } catch(e){}
+      setLat(latN.toFixed(4));
+      setLng(lngN.toFixed(4));
+      setCity(newCity);
       setGpsLoad(false);
-      Alert.alert('📡 GPS', `${newCity}\n${latN.toFixed(4)}, ${lngN.toFixed(4)}\nSunrise: ${sunriseStr} · Sunset: ${sunsetStr}`);
+      return { latN, lngN, newCity };
     } catch(e) {
       setGpsLoad(false);
-      Alert.alert('GPS Error', 'Could not get location: '+(e.message||'unknown error'));
+      Alert.alert('GPS Error', e.message||'Could not get location');
+      return null;
     }
   };
 
-  const handleSave = () => {
-    const latN = parseFloat(lat)||config.lat;
-    const lngN = parseFloat(lng)||config.lng;
+  const handleApply = async () => {
+    let latN = parseFloat(lat) || config.lat;
+    let lngN = parseFloat(lng) || config.lng;
+    let cityName = city;
+
+    // For 'auto' or 'gps-once' modes when applying, get fresh GPS now
+    if (mode === 'auto' || mode === 'gps-once') {
+      const gps = await fetchGPS();
+      if (gps) { latN = gps.latN; lngN = gps.lngN; cityName = gps.newCity; }
+    }
+
     let sunriseMin, sunsetMin, sunriseStr, sunsetStr;
-    if (srMode==='manual') {
+    if (useManualTime) {
       sunriseMin = parseInt(srH)*60+parseInt(srM);
       sunsetMin  = parseInt(ssH)*60+parseInt(ssM);
       sunriseStr = `${srH}:${srM}`; sunsetStr = `${ssH}:${ssM}`;
@@ -510,45 +505,98 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
       sunriseMin=calc.sunriseMin; sunsetMin=calc.sunsetMin;
       sunriseStr=calc.sunriseStr; sunsetStr=calc.sunsetStr;
     }
-    setConfig({ city, lat:latN, lng:lngN, srH:parseInt(srH), srM:parseInt(srM), ssH:parseInt(ssH), ssM:parseInt(ssM), sunriseMin, sunsetMin, sunriseStr, sunsetStr, locationMode:locMode, sunriseMode:srMode, notifs });
+    const newConfig = {
+      city:cityName, lat:latN, lng:lngN,
+      srH:parseInt(srH), srM:parseInt(srM), ssH:parseInt(ssH), ssM:parseInt(ssM),
+      sunriseMin, sunsetMin, sunriseStr, sunsetStr,
+      locationMode: mode === 'auto' ? 'auto' : mode === 'gps-once' ? 'gps' : 'manual',
+      sunriseMode: useManualTime ? 'manual' : 'auto',
+      notifs,
+    };
+    setConfig(newConfig);
+    try {
+      if (mode === 'auto' || mode === 'gps-once') {
+        await AsyncStorage.setItem('lastGPS', JSON.stringify({lat:latN, lng:lngN, city:cityName}));
+      }
+      await AsyncStorage.setItem('locationMode', mode);
+    } catch(e) {}
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
   };
 
-  const ModeBtn = ({label,active,onPress}) => (
-    <TouchableOpacity onPress={onPress} style={[ss.modeBtn,active&&ss.modeBtnActive]}>
-      <Text style={[ss.modeBtnText,active&&{color:C.gold}]}>{label}</Text>
-    </TouchableOpacity>
-  );
+  const ModeCard = ({id, icon, title, subtitle, children}) => {
+    const active = mode === id;
+    return (
+      <TouchableOpacity activeOpacity={0.7} onPress={()=>setMode(id)} style={[ss.modeCard, active && ss.modeCardActive]}>
+        <View style={{flexDirection:'row',alignItems:'center'}}>
+          <View style={[ss.modeRadio, active && ss.modeRadioActive]}>{active && <View style={ss.modeRadioInner}/>}</View>
+          <Text style={ss.modeCardIcon}>{icon}</Text>
+          <View style={{flex:1}}>
+            <Text style={[ss.modeCardTitle, active && {color:C.gold}]}>{title}</Text>
+            <Text style={ss.modeCardSub}>{subtitle}</Text>
+          </View>
+        </View>
+        {active && children && <View style={ss.modeCardBody}>{children}</View>}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <View style={s.screenHeader}><Text style={s.screenTitle}>Settings</Text><Text style={s.screenDesc}>Location, sunrise & notifications</Text></View>
-      <View style={{padding:14,gap:12}}>
+      <View style={s.screenHeader}><Text style={s.screenTitle}>Settings</Text><Text style={s.screenDesc}>Location & sunrise · notifications</Text></View>
+      <View style={{padding:14,gap:14}}>
 
         <Text style={s.sectionLabel}>📍  Location Source</Text>
-        <View style={s.settingCard}>
-          <View style={{flexDirection:'row',padding:10,gap:8}}>
-            <ModeBtn label="⚙️ Default" active={locMode==='default'} onPress={()=>setLocMode('default')}/>
-            <ModeBtn label="✏️ Manual"  active={locMode==='manual'}  onPress={()=>setLocMode('manual')}/>
-            <ModeBtn label="📡 GPS"     active={locMode==='gps'}     onPress={getGPS}/>
-          </View>
-          {locMode!=='default' && <>
-            <View style={ss.inputRow}><View style={{flex:1}}><Text style={s.settingTitle}>City</Text></View><TextInput style={ss.input} value={city} onChangeText={setCity} placeholderTextColor={C.faint}/></View>
-            <View style={ss.inputRow}><View style={{flex:1}}><Text style={s.settingTitle}>Latitude</Text></View><TextInput style={ss.input} value={lat} onChangeText={setLat} keyboardType="numeric" placeholderTextColor={C.faint}/></View>
-            <View style={[ss.inputRow,{borderBottomWidth:0}]}><View style={{flex:1}}><Text style={s.settingTitle}>Longitude</Text></View><TextInput style={ss.input} value={lng} onChangeText={setLng} keyboardType="numeric" placeholderTextColor={C.faint}/></View>
-          </>}
-          {locMode==='default'&&<View style={{padding:12,borderTopWidth:0.5,borderColor:'#3a1a5a'}}><Text style={{fontSize:11,color:C.muted}}>Default: Varanasi (25.3176°N, 82.9739°E)</Text></View>}
-        </View>
 
-        <Text style={s.sectionLabel}>🌅  Sunrise Calculation</Text>
-        <View style={s.settingCard}>
-          <View style={{flexDirection:'row',padding:10,gap:8}}>
-            <ModeBtn label="🌐 Auto" active={srMode==='auto'}   onPress={()=>setSrMode('auto')}/>
-            <ModeBtn label="✏️ Manual" active={srMode==='manual'} onPress={()=>setSrMode('manual')}/>
+        <ModeCard id="auto" icon="🌐" title="Auto (GPS on every open)" subtitle="App detects your location each time you open it. Always accurate while traveling.">
+          {gpsLoad
+            ? <Text style={ss.modeStatus}>📡 Detecting location...</Text>
+            : <>
+                <Text style={ss.modeStatus}>📍 {city}</Text>
+                <Text style={ss.modeCoords}>{lat}°, {lng}°</Text>
+                <Text style={[ss.modeStatus,{color:C.gold,marginTop:4}]}>🌅 {config.sunriseStr}  ·  🌇 {config.sunsetStr}</Text>
+              </>
+          }
+        </ModeCard>
+
+        <ModeCard id="gps-once" icon="🛰️" title="GPS now (fixed)" subtitle="Take location once now, then keep it. Good for home/office.">
+          <TouchableOpacity disabled={gpsLoad} onPress={fetchGPS} style={ss.modeBtnInline}>
+            <Text style={{color:C.gold,fontSize:14,fontWeight:'500'}}>{gpsLoad?'📡 Detecting…':'📡  Detect Location Now'}</Text>
+          </TouchableOpacity>
+          <Text style={[ss.modeStatus,{marginTop:8}]}>📍 {city}</Text>
+          <Text style={ss.modeCoords}>{lat}°, {lng}°</Text>
+        </ModeCard>
+
+        <ModeCard id="manual" icon="✏️" title="Manual" subtitle="Type city name and coordinates yourself.">
+          <View style={ss.manualRow}>
+            <Text style={ss.manualLabel}>City</Text>
+            <TextInput style={ss.input} value={city} onChangeText={setCity} placeholderTextColor={C.faint}/>
           </View>
-          {srMode==='auto'&&<View style={{padding:12,borderTopWidth:0.5,borderColor:'#3a1a5a'}}><Text style={{fontSize:11,color:C.muted}}>Calculated from coordinates.</Text><Text style={{fontSize:12,color:C.gold,marginTop:4}}>🌅 {config.sunriseStr}  🌇 {config.sunsetStr}</Text></View>}
-          {srMode==='manual'&&<>
+          <View style={ss.manualRow}>
+            <Text style={ss.manualLabel}>Latitude</Text>
+            <TextInput style={ss.input} value={lat} onChangeText={setLat} keyboardType="numeric" placeholderTextColor={C.faint}/>
+          </View>
+          <View style={ss.manualRow}>
+            <Text style={ss.manualLabel}>Longitude</Text>
+            <TextInput style={ss.input} value={lng} onChangeText={setLng} keyboardType="numeric" placeholderTextColor={C.faint}/>
+          </View>
+        </ModeCard>
+
+        <Text style={s.sectionLabel}>🌅  Sunrise Time</Text>
+        <View style={s.settingCard}>
+          <View style={s.settingRow}>
+            <View style={{flex:1}}>
+              <Text style={s.settingTitle}>{useManualTime?'✏️  Manual sunrise':'🌐  Auto (calculated)'}</Text>
+              <Text style={s.settingSub}>{useManualTime?'Type your own sunrise/sunset times':'Calculated from your coordinates using SunCalc'}</Text>
+            </View>
+            <Switch value={useManualTime} onValueChange={setUseManualTime} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={useManualTime?C.gold:'#6a4a8a'}/>
+          </View>
+          {!useManualTime && (
+            <View style={{padding:14,borderTopWidth:0.5,borderColor:'#3a1a5a'}}>
+              <Text style={{fontSize:14,color:C.gold}}>🌅 {config.sunriseStr}  ·  🌇 {config.sunsetStr}</Text>
+            </View>
+          )}
+          {useManualTime && <>
             <View style={ss.inputRow}><View style={{flex:1}}><Text style={s.settingTitle}>Sunrise (HH:MM)</Text></View><View style={ss.timeRow}><TextInput style={[ss.input,ss.timePart]} value={srH} onChangeText={setSrH} keyboardType="numeric" maxLength={2}/><Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>:</Text><TextInput style={[ss.input,ss.timePart]} value={srM} onChangeText={setSrM} keyboardType="numeric" maxLength={2}/></View></View>
             <View style={[ss.inputRow,{borderBottomWidth:0}]}><View style={{flex:1}}><Text style={s.settingTitle}>Sunset (HH:MM)</Text></View><View style={ss.timeRow}><TextInput style={[ss.input,ss.timePart]} value={ssH} onChangeText={setSsH} keyboardType="numeric" maxLength={2}/><Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>:</Text><TextInput style={[ss.input,ss.timePart]} value={ssM} onChangeText={setSsM} keyboardType="numeric" maxLength={2}/></View></View>
           </>}
@@ -591,8 +639,8 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
           </View>
         </View>
 
-        <TouchableOpacity style={s.saveBtn} onPress={handleSave}>
-          <Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>{saved?'✅  Settings Applied!':'💾  Save & Apply'}</Text>
+        <TouchableOpacity style={s.saveBtn} onPress={handleApply}>
+          <Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>{saved?'✅  Applied!':'💾  Apply'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[s.saveBtn,{marginTop:10,backgroundColor:C.bgCard}]} onPress={async()=>{
@@ -605,7 +653,6 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
                 return;
               }
             }
-            // Ensure channel exists (in case useEffect didn't run yet)
             if (Platform.OS === 'android') {
               await Notifications.setNotificationChannelAsync('svara-transitions', {
                 name: 'Svara Transitions',
@@ -626,7 +673,6 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
               },
               trigger: null,
             });
-            // Verify it was scheduled
             const all = await Notifications.getAllScheduledNotificationsAsync();
             const perm = await Notifications.getPermissionsAsync();
             Alert.alert(
@@ -664,9 +710,16 @@ function InnerApp() {
     };
   });
 
-  // Load last GPS location on app start
+  // Load saved GPS + mode on app start. If mode is 'auto' (default), fetch fresh GPS.
   useEffect(() => {
     (async () => {
+      let savedMode = 'auto';
+      try {
+        const m = await AsyncStorage.getItem('locationMode');
+        if (m) savedMode = m;
+      } catch(e) {}
+
+      // First, load the last known location from storage as a starting point
       try {
         const raw = await AsyncStorage.getItem('lastGPS');
         if (raw) {
@@ -679,11 +732,39 @@ function InnerApp() {
               lat: last.lat, lng: last.lng,
               sunriseMin: calc.sunriseMin, sunsetMin: calc.sunsetMin,
               sunriseStr: calc.sunriseStr, sunsetStr: calc.sunsetStr,
-              locationMode: 'gps',
+              locationMode: savedMode === 'manual' ? 'manual' : savedMode === 'gps-once' ? 'gps' : 'auto',
             }));
           }
         }
       } catch(e) {}
+
+      // If mode is auto (or unset), refresh GPS now in the background
+      if (savedMode === 'auto' || !savedMode) {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            const latN = loc.coords.latitude;
+            const lngN = loc.coords.longitude;
+            let cityName = 'Current Location';
+            try {
+              const geo = await Location.reverseGeocodeAsync({ latitude: latN, longitude: lngN });
+              if (geo && geo.length > 0) {
+                cityName = geo[0].city || geo[0].district || geo[0].region || 'Current Location';
+              }
+            } catch(e) {}
+            const calc = calcSunrise(latN, lngN);
+            setConfig(prev => ({
+              ...prev,
+              city: cityName, lat: latN, lng: lngN,
+              sunriseMin: calc.sunriseMin, sunsetMin: calc.sunsetMin,
+              sunriseStr: calc.sunriseStr, sunsetStr: calc.sunsetStr,
+              locationMode: 'auto',
+            }));
+            await AsyncStorage.setItem('lastGPS', JSON.stringify({lat:latN, lng:lngN, city:cityName}));
+          }
+        } catch(e) {}
+      }
     })();
   }, []);
 
@@ -984,6 +1065,20 @@ const ss = StyleSheet.create({
   modeBtn:      { flex:1, padding:12, borderRadius:8, backgroundColor:C.bgCard, borderWidth:0.5, borderColor:C.border, alignItems:'center' },
   modeBtnActive:{ backgroundColor:C.purple, borderColor:C.gold },
   modeBtnText:  { fontSize:13, color:C.muted },
+  modeCard:     { backgroundColor:C.bgCard, borderRadius:14, borderWidth:0.5, borderColor:C.border, padding:14 },
+  modeCardActive:{ borderColor:C.gold, borderWidth:1, backgroundColor:C.purple },
+  modeCardIcon: { fontSize:22, marginRight:10 },
+  modeCardTitle:{ fontSize:15, color:C.goldLight, fontWeight:'500' },
+  modeCardSub:  { fontSize:12, color:C.muted, marginTop:3, lineHeight:17 },
+  modeRadio:    { width:18, height:18, borderRadius:9, borderWidth:1.5, borderColor:C.muted, marginRight:10, alignItems:'center', justifyContent:'center' },
+  modeRadioActive:{ borderColor:C.gold },
+  modeRadioInner:{ width:8, height:8, borderRadius:4, backgroundColor:C.gold },
+  modeCardBody: { marginTop:12, paddingTop:12, borderTopWidth:0.5, borderColor:'#3a1a5a' },
+  modeStatus:   { fontSize:14, color:C.goldLight, fontWeight:'500' },
+  modeCoords:   { fontSize:12, color:C.muted, marginTop:2 },
+  modeBtnInline:{ backgroundColor:C.bg, borderWidth:0.5, borderColor:C.gold, borderRadius:10, paddingVertical:10, alignItems:'center' },
+  manualRow:    { flexDirection:'row', alignItems:'center', justifyContent:'space-between', paddingVertical:8 },
+  manualLabel:  { fontSize:14, color:C.goldLight, flex:1 },
   inputRow:     { flexDirection:'row', alignItems:'center', justifyContent:'space-between', padding:14, paddingHorizontal:16, borderBottomWidth:0.5, borderColor:'#3a1a5a' },
   input:        { backgroundColor:C.bg, borderWidth:0.5, borderColor:C.border, borderRadius:8, color:C.gold, fontSize:15, paddingVertical:8, paddingHorizontal:12, minWidth:100, textAlign:'right' },
   timeRow:      { flexDirection:'row', alignItems:'center', gap:4 },
