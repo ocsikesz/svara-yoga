@@ -104,10 +104,15 @@ const RECOMMENDATIONS = {
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function calcSunrise(lat, lng, date = new Date()) {
   const times = SunCalc.getTimes(date, lat, lng);
+  // Convert a Date to minutes-since-midnight (with fractional seconds for accurate
+  // tattva/nadi computations — we want full precision internally).
   const toLocalMin = d => {
     if (!d || isNaN(d.getTime())) return 0;
     return d.getHours()*60 + d.getMinutes() + d.getSeconds()/60;
   };
+  // Display: show the minute during which the transition occurred.
+  // e.g. sunrise at 05:47:22 → "05:47" (this is what SunCalc.app and most apps show).
+  // Note: getMinutes() already truncates seconds, so we just format directly.
   const toHHMM = d => {
     if (!d || isNaN(d.getTime())) return '--:--';
     return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -835,59 +840,54 @@ function InnerApp() {
         const sr = config.sunriseMin;
         const cycleDur = isGhatika ? 120 : 60;
         const seq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
+        const lunarNow = getLunarDay();
+        const startNadi = (LUNAR_DAYS.find(d => d.day === lunarNow.day) || LUNAR_DAYS[0]).nadi;
 
-        // Build list of TATTVA transitions in the next 24h (1440 min).
-        // Tattva pattern repeats every cycleDur min starting from sunrise.
-        const txs = []; // {dm:minutesFromNow, type:'tattva'|'nadi', toId}
-        if (config.notifs?.tattva) {
-          // Find the position-within-cycle at "now"
-          let mFromSR = nowMin - sr;
-          if (mFromSR < 0) mFromSR += 1440; // before sunrise → use yesterday's cycle continuation
-          // Walk forward 24h, finding each tattva boundary
-          for (let dm = 0; dm <= 1440; dm++) {
-            const futureMFromSR = mFromSR + dm;
-            const pos = ((futureMFromSR % cycleDur) + cycleDur) % cycleDur;
-            // Check if pos is exactly at a tattva boundary
-            let e = 0;
-            for (let i = 0; i < seq.length; i++) {
-              e += isGhatika ? seq[i].ghatika : seq[i].classic;
-              if (pos === e % cycleDur) {
-                // Transition to next tattva
-                const nextIdx = (i + 1) % seq.length;
-                if (dm > 0) txs.push({ dm, type:'tattva', toId: seq[nextIdx].id });
-                break;
-              }
+        // Helper: compute nadi at a given offset (minutes from now)
+        const nadiAt = (offsetMin) => {
+          const minFromSR = nowMin + offsetMin - sr;
+          if (minFromSR < 0 || minFromSR > 720) return 'sushumna';
+          const cyclePos = minFromSR % 120;
+          if (cyclePos < 2 || (cyclePos >= 60 && cyclePos < 62)) return 'sushumna';
+          if (cyclePos < 60) return startNadi;
+          return startNadi === 'ida' ? 'pingala' : 'ida';
+        };
+
+        // Helper: compute tattva at a given offset
+        const tattvaAt = (offsetMin) => {
+          const mFromSR = nowMin + offsetMin - sr;
+          if (mFromSR < 0) return seq[0];
+          const pos = ((mFromSR % cycleDur) + cycleDur) % cycleDur;
+          let elapsed = 0;
+          for (const t of seq) { elapsed += isGhatika ? t.ghatika : t.classic; if (pos < elapsed) return t; }
+          return seq[seq.length-1];
+        };
+
+        // Build list of TATTVA and NADI transitions in the next 24h.
+        // Walk minute-by-minute, detect when value changes from previous.
+        const txs = []; // {dm, type:'tattva'|'nadi', toId}
+        let lastTat = tattvaAt(0).id;
+        let lastNadi = nadiAt(0);
+        for (let dm = 1; dm <= 1440; dm++) {
+          if (config.notifs?.tattva) {
+            const t = tattvaAt(dm).id;
+            if (t !== lastTat) {
+              txs.push({ dm, type:'tattva', toId: t });
+              lastTat = t;
             }
           }
-        }
-
-        // NADI transitions happen at sunrise each day; nadi for a given day
-        // depends on lunar paksha and tithi (already in getSvaraFromSunrise).
-        // Compute when tomorrow's sunrise is in minutes-from-now.
-        if (config.notifs?.nadi) {
-          let dmSunriseTomorrow = sr - nowMin;
-          if (dmSunriseTomorrow <= 0) dmSunriseTomorrow += 1440;
-          // Schedule the next ~5 sunrises (5 days of nadi alerts)
-          for (let day = 0; day < 5; day++) {
-            const dm = dmSunriseTomorrow + day*1440;
-            if (dm > 0 && dm <= 5*1440) {
-              // We don't know tomorrow's exact nadi without recomputing lunar
-              // day for that date — but for a same-day approximation, use
-              // today's lunar day shifted by `day`.
-              const futureDate = new Date(now.getTime() + dm*60000);
-              const dayInMonth = Math.floor((futureDate - new Date(2024,5,6))/86400000);
-              const dInCycle = ((dayInMonth % 30) + 30) % 30;
-              const paksha = dInCycle < 15 ? 'shukla' : 'krishna';
-              const tithi = (dInCycle % 15) + 1;
-              const nadiAtSunrise = getSvaraFromSunrise(sr, tithi, paksha);
-              txs.push({ dm, type:'nadi', toId: nadiAtSunrise });
+          if (config.notifs?.nadi) {
+            const n = nadiAt(dm);
+            if (n !== lastNadi) {
+              txs.push({ dm, type:'nadi', toId: n });
+              lastNadi = n;
             }
           }
         }
 
         // Sort and limit (Android caps at ~50 scheduled notifications per app)
         txs.sort((a,b) => a.dm - b.dm);
-        const limited = txs.slice(0, 40);
+        const limited = txs.slice(0, 45);
 
         // Schedule each transition with appropriate trigger
         for (const tx of limited) {
