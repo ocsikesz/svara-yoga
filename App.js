@@ -520,10 +520,12 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
     };
     setConfig(newConfig);
     try {
-      if (mode === 'auto' || mode === 'gps-once') {
-        await AsyncStorage.setItem('lastGPS', JSON.stringify({lat:latN, lng:lngN, city:cityName}));
-      }
-      await AsyncStorage.setItem('locationMode', mode);
+      // Persist the whole config in one place so ALL settings survive a restart:
+      // manual sunrise time, manual coords, location mode, sunrise mode, notif prefs.
+      // Also preserve isGhatika which is owned by InnerApp.
+      const existing = await AsyncStorage.getItem('appConfig');
+      const merged = { ...(existing ? JSON.parse(existing) : {}), ...newConfig };
+      await AsyncStorage.setItem('appConfig', JSON.stringify(merged));
     } catch(e) {}
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
@@ -742,36 +744,33 @@ function InnerApp() {
     };
   });
 
-  // Load saved GPS + mode on app start. If mode is 'auto' (default), fetch fresh GPS.
+  // Load saved config on app start.
+  // Persistence model:
+  //   AsyncStorage 'appConfig' holds the whole saved config object.
+  //   On start: load this and apply it. Then:
+  //   - If locationMode is 'auto', refresh GPS in background (and re-calc sunrise
+  //     ONLY if sunriseMode is also 'auto'; if user has manual time we keep it)
+  //   - If locationMode is 'gps' (gps-once) or 'manual', leave coordinates alone
+  //   - Manual sunrise time always wins over auto-calc, regardless of location mode
   useEffect(() => {
     (async () => {
-      let savedMode = 'auto';
+      let saved = null;
       try {
-        const m = await AsyncStorage.getItem('locationMode');
-        if (m) savedMode = m;
+        const raw = await AsyncStorage.getItem('appConfig');
+        if (raw) saved = JSON.parse(raw);
       } catch(e) {}
 
-      // First, load the last known location from storage as a starting point
-      try {
-        const raw = await AsyncStorage.getItem('lastGPS');
-        if (raw) {
-          const last = JSON.parse(raw);
-          if (last && typeof last.lat === 'number' && typeof last.lng === 'number') {
-            const calc = calcSunrise(last.lat, last.lng);
-            setConfig(prev => ({
-              ...prev,
-              city: last.city || prev.city,
-              lat: last.lat, lng: last.lng,
-              sunriseMin: calc.sunriseMin, sunsetMin: calc.sunsetMin,
-              sunriseStr: calc.sunriseStr, sunsetStr: calc.sunsetStr,
-              locationMode: savedMode === 'manual' ? 'manual' : savedMode === 'gps-once' ? 'gps' : 'auto',
-            }));
-          }
-        }
-      } catch(e) {}
+      if (saved && typeof saved === 'object') {
+        // Apply everything from saved config
+        setConfig(prev => ({ ...prev, ...saved }));
+        if (typeof saved.isGhatika === 'boolean') setIsGhatika(saved.isGhatika);
+      }
 
-      // If mode is auto (or unset), refresh GPS now in the background
-      if (savedMode === 'auto' || !savedMode) {
+      const mode = saved?.locationMode || 'auto';
+      const srMode = saved?.sunriseMode || 'auto';
+
+      // If location mode is 'auto', refresh GPS in background
+      if (mode === 'auto') {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
@@ -785,20 +784,37 @@ function InnerApp() {
                 cityName = geo[0].city || geo[0].district || geo[0].region || 'Current Location';
               }
             } catch(e) {}
-            const calc = calcSunrise(latN, lngN);
-            setConfig(prev => ({
-              ...prev,
-              city: cityName, lat: latN, lng: lngN,
-              sunriseMin: calc.sunriseMin, sunsetMin: calc.sunsetMin,
-              sunriseStr: calc.sunriseStr, sunsetStr: calc.sunsetStr,
-              locationMode: 'auto',
-            }));
-            await AsyncStorage.setItem('lastGPS', JSON.stringify({lat:latN, lng:lngN, city:cityName}));
+            setConfig(prev => {
+              const next = { ...prev, city: cityName, lat: latN, lng: lngN, locationMode: 'auto' };
+              // Only update sunrise/sunset if user wants auto-calculated times
+              if (srMode === 'auto') {
+                const calc = calcSunrise(latN, lngN);
+                next.sunriseMin = calc.sunriseMin;
+                next.sunsetMin  = calc.sunsetMin;
+                next.sunriseStr = calc.sunriseStr;
+                next.sunsetStr  = calc.sunsetStr;
+              }
+              // Persist immediately so next restart sees fresh location
+              try { AsyncStorage.setItem('appConfig', JSON.stringify(next)); } catch(e) {}
+              return next;
+            });
           }
         } catch(e) {}
       }
     })();
   }, []);
+
+  // Persist isGhatika changes (separate from config in case user toggles only this)
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('appConfig');
+        const obj = raw ? JSON.parse(raw) : {};
+        obj.isGhatika = isGhatika;
+        await AsyncStorage.setItem('appConfig', JSON.stringify(obj));
+      } catch(e) {}
+    })();
+  }, [isGhatika]);
 
   // Request notification permissions + create Android notification channel
   useEffect(() => {
