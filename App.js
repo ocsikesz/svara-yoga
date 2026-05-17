@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SunCalc from 'suncalc';
@@ -7,7 +7,13 @@ import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({ shouldShowAlert:true, shouldPlaySound:true, shouldSetBadge:false }),
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
 });
 
 const C = {
@@ -54,11 +60,21 @@ const SHLOKAS = [
 ];
 
 const LUNAR_DAYS = [
-  {day:1,nadi:'ida'},{day:2,nadi:'ida'},{day:3,nadi:'ida'},
-  {day:4,nadi:'pingala'},{day:5,nadi:'pingala'},{day:6,nadi:'pingala'},
-  {day:7,nadi:'ida'},{day:8,nadi:'ida'},{day:9,nadi:'ida'},
-  {day:10,nadi:'pingala'},{day:11,nadi:'pingala'},{day:12,nadi:'pingala'},
-  {day:13,nadi:'ida'},{day:14,nadi:'ida'},{day:15,nadi:'pingala'},
+  {day:1,  nadi:'ida',     name:'Pratipada',  emoji:'🌑',  meaning:'Beginning · new intention', favor:['Plant intentions','Begin new study','Light cleansing'], avoid:['Heavy work','Travel','Major decisions']},
+  {day:2,  nadi:'ida',     name:'Dwitiya',    emoji:'🌒',  meaning:'Growth · gentle expansion', favor:['Build relationships','Learn skills','Cook & nourish'], avoid:['Conflict','Long journeys']},
+  {day:3,  nadi:'ida',     name:'Tritiya',    emoji:'🌒',  meaning:'Auspicious · sacred work',  favor:['Sacred art','Music','Spiritual study','Marriage rites'], avoid:['Surgery','Disputes']},
+  {day:4,  nadi:'pingala', name:'Chaturthi',  emoji:'🌓',  meaning:'Obstacle · honor Ganesha',  favor:['Remove obstacles','Worship Ganesha','Inner work'], avoid:['Major launches','Travel south']},
+  {day:5,  nadi:'pingala', name:'Panchami',   emoji:'🌓',  meaning:'Wisdom · serpent power',    favor:['Knowledge work','Mantras','Snake/Naga worship'], avoid:['Surgery on snakes/skin','Underground work']},
+  {day:6,  nadi:'pingala', name:'Shashthi',   emoji:'🌔',  meaning:'Skanda · warrior energy',   favor:['Courage tasks','Physical training','Health work'], avoid:['Travel','Risky ventures']},
+  {day:7,  nadi:'ida',     name:'Saptami',    emoji:'🌔',  meaning:'Sun-blessed · clear light', favor:['Health rituals','Solar mantras','Bright endeavors'], avoid:['Dark deeds','Hidden plans']},
+  {day:8,  nadi:'ida',     name:'Ashtami',    emoji:'🌔',  meaning:'Power · Durga energy',      favor:['Worship','Spiritual practice','Inner battles'], avoid:['Worldly business','Travel']},
+  {day:9,  nadi:'ida',     name:'Navami',     emoji:'🌕',  meaning:'Fierce · transformative',   favor:['Deep sadhana','Letting go','Goddess worship'], avoid:['Pleasures','Light socializing','Travel']},
+  {day:10, nadi:'pingala', name:'Dashami',    emoji:'🌕',  meaning:'Victory · success energy',  favor:['Travel north/east','Big decisions','Achievement'], avoid:['Defeatist thinking','Procrastination']},
+  {day:11, nadi:'pingala', name:'Ekadashi',   emoji:'🌕',  meaning:'Sacred fast · purification',favor:['Fast & meditate','Vishnu mantras','Yoga'], avoid:['Heavy food','Grains','Excess speech']},
+  {day:12, nadi:'pingala', name:'Dwadashi',   emoji:'🌖',  meaning:'Renewal · break fast',      favor:['Charity','Gentle eating','Service'], avoid:['Anger','Greed','Conflict']},
+  {day:13, nadi:'ida',     name:'Trayodashi', emoji:'🌖',  meaning:'Auspicious · attractive',   favor:['Beauty work','Arts','Diplomacy','Romance'], avoid:['Crude speech','Aggressive deals']},
+  {day:14, nadi:'ida',     name:'Chaturdashi',emoji:'🌗',  meaning:'Fierce · Shiva energy',     favor:['Tantric practice','Inner work','Shiva worship'], avoid:['Travel','Worldly ventures','Celebrations']},
+  {day:15, nadi:'pingala', name:'Purnima/Amavasya', emoji:'🌕', meaning:'Full/New Moon · turning point', favor:['Meditation','Ritual','Reflection','Charity'], avoid:['Major undertakings','Aggressive action','Heavy meals']},
 ];
 
 // ── RECOMMENDATIONS MATRIX (Nadi × Tattva = 15 combinations) ──────────────────
@@ -332,29 +348,102 @@ function SvaraScreen({ picked, setPicked }) {
 // ── LUNAR ─────────────────────────────────────────────────────────────────────
 function LunarScreen() {
   const { day, paksha } = getLunarDay();
+  const [selectedDay, setSelectedDay] = useState(day);
+
+  // Build "today + next 2 days" forecast
+  const buildDay = (offset) => {
+    const future = new Date(Date.now() + offset*86400000);
+    const dayInMonth = Math.floor((future - new Date(2024,5,6))/86400000);
+    const dInCycle = ((dayInMonth % 30) + 30) % 30;
+    const fPaksha = dInCycle < 15 ? 'shukla' : 'krishna';
+    const fTithi  = (dInCycle % 15) + 1;
+    const entry   = LUNAR_DAYS.find(x => x.day === fTithi) || LUNAR_DAYS[0];
+    const labels  = ['Today','Tomorrow','In 2 days'];
+    return { offset, paksha:fPaksha, tithi:fTithi, entry, dateLabel:labels[offset], date:future };
+  };
+  const forecast = [buildDay(0), buildDay(1), buildDay(2)];
+
+  // Selected detail (either from forecast or grid tap)
+  const detail = LUNAR_DAYS.find(x => x.day === selectedDay) || LUNAR_DAYS[0];
+
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <View style={s.screenHeader}><Text style={s.screenTitle}>Lunar Cycle Guide</Text><Text style={s.screenDesc}>Nostril dominance by lunar day</Text></View>
+      <View style={s.screenHeader}><Text style={s.screenTitle}>Lunar Cycle Guide</Text><Text style={s.screenDesc}>Tithi · Nadi · Practice</Text></View>
+
       <View style={s.card}>
         <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
           <View><Text style={{fontSize:13,color:C.muted}}>Current Paksha</Text><Text style={{fontSize:18,color:C.gold,fontWeight:'500',marginTop:2}}>{paksha==='shukla'?'Shukla · Waxing':'Krishna · Waning'}</Text></View>
           <Text style={{fontSize:40}}>{paksha==='shukla'?'🌙':'🌑'}</Text>
         </View>
-        <View style={{flexDirection:'row',gap:18,marginBottom:12}}>
-          <Text style={{fontSize:13,color:C.blue}}>🔵 Ida (Left)</Text>
-          <Text style={{fontSize:13,color:C.orange}}>🟠 Pingala (Right)</Text>
+      </View>
+
+      <Text style={[s.sectionLabel,{marginHorizontal:16,marginTop:6,marginBottom:8}]}>📅  3-Day Forecast</Text>
+      {forecast.map(f => (
+        <View key={f.offset} style={[s.lunarDayCard,{borderColor:f.entry.nadi==='ida'?'#2a4a7a':'#6a3a1a'}]}>
+          <View style={s.lunarDayHeader}>
+            <View>
+              <Text style={s.lunarDayLabel}>{f.dateLabel}  ·  {f.date.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'})}</Text>
+              <Text style={s.lunarDayTitle}>{f.entry.emoji}  {f.entry.name}  ·  Day {f.tithi}</Text>
+              <Text style={[s.lunarDayMeaning,{color:f.entry.nadi==='ida'?C.blue:C.orange}]}>{f.entry.meaning}</Text>
+            </View>
+          </View>
+          <View style={s.lunarDayNadi}>
+            <Text style={{fontSize:13,color:f.entry.nadi==='ida'?C.blue:C.orange,fontWeight:'500'}}>
+              {f.entry.nadi==='ida'?'🌙 Ida (Left) dominates':'☀️ Pingala (Right) dominates'}
+            </Text>
+            <Text style={{fontSize:11,color:C.muted,marginTop:2}}>{f.paksha==='shukla'?'Shukla Paksha':'Krishna Paksha'}</Text>
+          </View>
+          <View style={{flexDirection:'row',gap:10,marginTop:10}}>
+            <View style={[s.lunarDDBox,{backgroundColor:C.greenBg,borderColor:C.greenBorder}]}>
+              <Text style={{fontSize:11,color:C.green,fontWeight:'500',marginBottom:4}}>✓ FAVOR</Text>
+              {f.entry.favor.slice(0,3).map((d,i)=><Text key={i} style={{fontSize:12,color:'#7ac0a0',lineHeight:18}}>• {d}</Text>)}
+            </View>
+            <View style={[s.lunarDDBox,{backgroundColor:C.redBg,borderColor:C.redBorder}]}>
+              <Text style={{fontSize:11,color:C.red,fontWeight:'500',marginBottom:4}}>✕ AVOID</Text>
+              {f.entry.avoid.slice(0,3).map((d,i)=><Text key={i} style={{fontSize:12,color:'#c08080',lineHeight:18}}>• {d}</Text>)}
+            </View>
+          </View>
+        </View>
+      ))}
+
+      <Text style={[s.sectionLabel,{marginHorizontal:16,marginTop:14,marginBottom:8}]}>🌙  All 15 Tithis  ·  tap any day</Text>
+      <View style={[s.card,{marginTop:0}]}>
+        <View style={{flexDirection:'row',gap:14,marginBottom:10}}>
+          <Text style={{fontSize:12,color:C.blue}}>🔵 Ida</Text>
+          <Text style={{fontSize:12,color:C.orange}}>🟠 Pingala</Text>
         </View>
         <View style={{flexDirection:'row',flexWrap:'wrap',gap:5}}>
           {LUNAR_DAYS.map(d=>(
-            <View key={d.day} style={[s.dayCell,d.nadi==='ida'?{backgroundColor:C.blueBg,borderColor:'#2a4a7a'}:{backgroundColor:C.orangeBg,borderColor:'#6a3a1a'},d.day===day&&{borderWidth:2,borderColor:C.gold}]}>
+            <TouchableOpacity
+              key={d.day}
+              onPress={()=>setSelectedDay(d.day)}
+              style={[
+                s.dayCell,
+                d.nadi==='ida'?{backgroundColor:C.blueBg,borderColor:'#2a4a7a'}:{backgroundColor:C.orangeBg,borderColor:'#6a3a1a'},
+                d.day===day&&{borderWidth:2,borderColor:C.gold},
+                d.day===selectedDay&&d.day!==day&&{borderWidth:2,borderColor:C.goldLight},
+              ]}>
               <Text style={{fontSize:12,fontWeight:'500',color:d.nadi==='ida'?C.blue:C.orange}}>{d.day}</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </View>
-      <View style={s.card}>
-        <Text style={{fontSize:12,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Today · Day {day} of {paksha==='shukla'?'Shukla':'Krishna'} Paksha</Text>
-        <Text style={{fontSize:16,color:C.gold,lineHeight:24}}>{LUNAR_DAYS.find(d=>d.day===day)?.nadi==='ida'?'Ida Nadi dominates from sunrise. Favorable for learning, healing and all peaceful activities.':'Pingala Nadi dominates. Favorable for physical work, business and courageous acts.'}</Text>
+
+      <View style={[s.card,{borderColor:detail.nadi==='ida'?'#2a4a7a':'#6a3a1a',borderWidth:1}]}>
+        <Text style={{fontSize:12,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{selectedDay===day?'Selected · Today':'Selected · Day '+selectedDay}</Text>
+        <Text style={{fontSize:18,color:C.gold,fontWeight:'500',marginBottom:4}}>{detail.emoji}  {detail.name}</Text>
+        <Text style={{fontSize:14,color:detail.nadi==='ida'?C.blue:C.orange,marginBottom:10,fontStyle:'italic'}}>{detail.meaning}</Text>
+        <Text style={{fontSize:13,color:C.muted,marginBottom:6}}>{detail.nadi==='ida'?'🌙 Ida Nadi dominates · cool, lunar energy':'☀️ Pingala Nadi dominates · warm, solar energy'}</Text>
+        <View style={{flexDirection:'row',gap:10,marginTop:8}}>
+          <View style={[s.lunarDDBox,{backgroundColor:C.greenBg,borderColor:C.greenBorder}]}>
+            <Text style={{fontSize:11,color:C.green,fontWeight:'500',marginBottom:4}}>✓ FAVOR</Text>
+            {detail.favor.map((d,i)=><Text key={i} style={{fontSize:12,color:'#7ac0a0',lineHeight:18}}>• {d}</Text>)}
+          </View>
+          <View style={[s.lunarDDBox,{backgroundColor:C.redBg,borderColor:C.redBorder}]}>
+            <Text style={{fontSize:11,color:C.red,fontWeight:'500',marginBottom:4}}>✕ AVOID</Text>
+            {detail.avoid.map((d,i)=><Text key={i} style={{fontSize:12,color:'#c08080',lineHeight:18}}>• {d}</Text>)}
+          </View>
+        </View>
       </View>
     </ScrollView>
   );
@@ -559,11 +648,34 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
                 return;
               }
             }
+            // Ensure channel exists (in case useEffect didn't run yet)
+            if (Platform.OS === 'android') {
+              await Notifications.setNotificationChannelAsync('svara-transitions', {
+                name: 'Svara Transitions',
+                importance: Notifications.AndroidImportance.HIGH,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#c9a96e',
+                sound: 'default',
+              });
+            }
             await Notifications.scheduleNotificationAsync({
-              content:{ title:'🕉️ Svara Yoga', body:'Test notification — notifications are working!', sound:true },
+              identifier: 'svara-test',
+              content:{
+                title:'🕉️ Svara Yoga',
+                body:'Test notification — notifications are working!',
+                sound:true,
+                priority: Notifications.AndroidNotificationPriority.HIGH,
+                ...(Platform.OS === 'android' ? { channelId:'svara-transitions' } : {}),
+              },
               trigger: null,
             });
-            Alert.alert('✓ Sent','Check your notification shade');
+            // Verify it was scheduled
+            const all = await Notifications.getAllScheduledNotificationsAsync();
+            const perm = await Notifications.getPermissionsAsync();
+            Alert.alert(
+              '✓ Test sent',
+              `Permission: ${perm.status}\nScheduled count: ${all.length}\n\nCheck notification shade. If nothing appears, check:\n• Phone Settings → Apps → Svara Yoga → Notifications (allow all)\n• Battery → Unrestricted background`
+            );
           } catch(e) {
             Alert.alert('Error',e.message||'Could not send notification');
           }
@@ -618,12 +730,32 @@ function InnerApp() {
     })();
   }, []);
 
-  // Request notification permissions on first launch
+  // Request notification permissions + create Android notification channel
   useEffect(() => {
     (async () => {
       try {
-        const { status } = await Notifications.getPermissionsAsync();
-        if (status !== 'granted') await Notifications.requestPermissionsAsync();
+        // Android 8+ requires a notification channel to display notifications
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('svara-transitions', {
+            name: 'Svara Transitions',
+            description: 'Notifications when nadi or tattva changes',
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#c9a96e',
+            sound: 'default',
+            enableVibrate: true,
+            showBadge: false,
+            bypassDnd: false,
+          });
+        }
+
+        const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted' && canAskAgain) {
+          await Notifications.requestPermissionsAsync({
+            android: {},
+            ios: { allowAlert:true, allowSound:true, allowBadge:false },
+          });
+        }
       } catch(e) {}
     })();
   }, []);
@@ -727,18 +859,19 @@ function InnerApp() {
           let activeTat = seq[0];
           let e = 0;
           for (const x of seq) { e += isGhatika ? x.ghatika : x.classic; if (pos < e) { activeTat = x; break; } }
-          // For tattva transitions, the new tattva is tx.toId
-          // For nadi transitions, recompute active tattva at sunrise
+          const androidFields = Platform.OS === 'android'
+            ? { channelId:'svara-transitions', priority: Notifications.AndroidNotificationPriority.HIGH }
+            : {};
           if (tx.type === 'tattva') {
             const ti = TATTVA_INFO[tx.toId];
             if (!ti) continue;
-            const ni = NADI_INFO[ tx.type === 'nadi' ? tx.toId : 'ida' ];
             await Notifications.scheduleNotificationAsync({
               content: {
                 title: `${ti.emoji}  ${ti.name.split(' ')[0]} active`,
                 body:  `Tattva changed to ${ti.name}`,
                 sound: true,
                 data:  { kind:'svara-tx' },
+                ...androidFields,
               },
               trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
             });
@@ -751,6 +884,7 @@ function InnerApp() {
                 body:  `${ni.name} nadi is now flowing`,
                 sound: true,
                 data:  { kind:'svara-tx' },
+                ...androidFields,
               },
               trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
             });
@@ -870,6 +1004,13 @@ const s = StyleSheet.create({
   resultBody:   { fontSize:14, color:'#a08ab0', lineHeight:22 },
   dayCell:      { width:42, height:42, borderRadius:8, alignItems:'center', justifyContent:'center', borderWidth:0.5 },
   shlokaCard:   { backgroundColor:C.bgCard, borderWidth:0.5, borderColor:C.border, borderRadius:14, padding:16, marginBottom:12 },
+  lunarDayCard: { marginHorizontal:16, marginBottom:10, backgroundColor:C.bgCard, borderRadius:14, borderWidth:1, padding:14 },
+  lunarDayHeader:{ marginBottom:8 },
+  lunarDayLabel:{ fontSize:11, color:C.muted, textTransform:'uppercase', letterSpacing:1, marginBottom:4 },
+  lunarDayTitle:{ fontSize:17, color:C.gold, fontWeight:'500', marginBottom:3 },
+  lunarDayMeaning:{ fontSize:13, fontStyle:'italic' },
+  lunarDayNadi: { backgroundColor:C.bg, borderRadius:8, padding:8, marginTop:4 },
+  lunarDDBox:   { flex:1, borderRadius:10, padding:10, borderWidth:0.5 },
   sectionLabel: { fontSize:13, color:C.faint, textTransform:'uppercase', letterSpacing:1.5 },
   settingCard:  { backgroundColor:C.bgCard, borderRadius:14, borderWidth:0.5, borderColor:C.border, overflow:'hidden' },
   settingRow:   { flexDirection:'row', alignItems:'center', justifyContent:'space-between', padding:14, paddingHorizontal:16, borderBottomWidth:0.5, borderColor:'#3a1a5a' },
