@@ -550,87 +550,111 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
       <View style={s.screenHeader}><Text style={s.screenTitle}>Settings</Text><Text style={s.screenDesc}>Location & sunrise · notifications</Text></View>
       <View style={{padding:14,gap:14}}>
 
-        <Text style={s.sectionLabel}>📍  Location Source</Text>
-
-        <ModeCard id="auto" icon="🌐" title="Auto (GPS on every open)" subtitle="App detects your location each time you open it. Always accurate while traveling.">
-          {gpsLoad
-            ? <Text style={ss.modeStatus}>📡 Detecting location...</Text>
-            : <>
-                <Text style={ss.modeStatus}>📍 {city}</Text>
-                <Text style={ss.modeCoords}>{lat}°, {lng}°</Text>
-                <Text style={[ss.modeStatus,{color:C.gold,marginTop:4}]}>🌅 {config.sunriseStr}  ·  🌇 {config.sunsetStr}</Text>
+        <Text style={s.sectionLabel}>📍  Location</Text>
+        <View style={s.settingCard}>
+          <View style={ss.tabRow}>
+            <TouchableOpacity onPress={()=>setMode('auto')} style={[ss.tabBtn, (mode==='auto'||mode==='gps-once') && ss.tabBtnActive]}>
+              <Text style={[ss.tabBtnText, (mode==='auto'||mode==='gps-once') && {color:C.gold}]}>🌐  Auto</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={()=>setMode('manual')} style={[ss.tabBtn, mode==='manual' && ss.tabBtnActive]}>
+              <Text style={[ss.tabBtnText, mode==='manual' && {color:C.gold}]}>✏️  Manual</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={ss.tabBody}>
+            {(mode==='auto' || mode==='gps-once') && (
+              <>
+                {gpsLoad
+                  ? <Text style={ss.modeStatus}>📡 Detecting location...</Text>
+                  : <>
+                      <Text style={ss.modeStatus}>📍 {city}</Text>
+                      <Text style={ss.modeCoords}>{lat}°, {lng}°</Text>
+                    </>
+                }
+                <TouchableOpacity disabled={gpsLoad} onPress={fetchGPS} style={[ss.modeBtnInline,{marginTop:10}]}>
+                  <Text style={{color:C.gold,fontSize:14,fontWeight:'500'}}>{gpsLoad?'📡 Detecting…':'📡  Refresh GPS now'}</Text>
+                </TouchableOpacity>
               </>
-          }
-        </ModeCard>
-
-        <ModeCard id="gps-once" icon="🛰️" title="GPS now (fixed)" subtitle="Take location once now, then keep it. Good for home/office.">
-          <TouchableOpacity disabled={gpsLoad} onPress={fetchGPS} style={ss.modeBtnInline}>
-            <Text style={{color:C.gold,fontSize:14,fontWeight:'500'}}>{gpsLoad?'📡 Detecting…':'📡  Detect Location Now'}</Text>
-          </TouchableOpacity>
-          <Text style={[ss.modeStatus,{marginTop:8}]}>📍 {city}</Text>
-          <Text style={ss.modeCoords}>{lat}°, {lng}°</Text>
-        </ModeCard>
-
-        <ModeCard id="manual" icon="✏️" title="Manual" subtitle="Type city name and coordinates yourself.">
-          <View style={ss.manualRow}>
-            <Text style={ss.manualLabel}>City</Text>
-            <TextInput style={ss.input} value={city} onChangeText={setCity} placeholderTextColor={C.faint}/>
+            )}
+            {mode==='manual' && (
+              <>
+                <View style={ss.manualRow}>
+                  <Text style={ss.manualLabel}>City</Text>
+                  <TextInput style={ss.input} value={city} onChangeText={setCity} placeholderTextColor={C.faint}/>
+                </View>
+                <View style={ss.manualRow}>
+                  <Text style={ss.manualLabel}>Latitude</Text>
+                  <TextInput style={ss.input} value={lat} onChangeText={setLat} keyboardType="numeric" placeholderTextColor={C.faint}/>
+                </View>
+                <View style={ss.manualRow}>
+                  <Text style={ss.manualLabel}>Longitude</Text>
+                  <TextInput style={ss.input} value={lng} onChangeText={setLng} keyboardType="numeric" placeholderTextColor={C.faint}/>
+                </View>
+              </>
+            )}
           </View>
-          <View style={ss.manualRow}>
-            <Text style={ss.manualLabel}>Latitude</Text>
-            <TextInput style={ss.input} value={lat} onChangeText={setLat} keyboardType="numeric" placeholderTextColor={C.faint}/>
-          </View>
-          <View style={ss.manualRow}>
-            <Text style={ss.manualLabel}>Longitude</Text>
-            <TextInput style={ss.input} value={lng} onChangeText={setLng} keyboardType="numeric" placeholderTextColor={C.faint}/>
-          </View>
-        </ModeCard>
+        </View>
 
         <Text style={s.sectionLabel}>🌅  Sunrise Time</Text>
         <View style={s.settingCard}>
-          <View style={s.settingRow}>
-            <View style={{flex:1}}>
-              <Text style={s.settingTitle}>{useManualTime?'✏️  Manual sunrise':'🌐  Auto (calculated)'}</Text>
-              <Text style={s.settingSub}>{useManualTime?'Type your own sunrise/sunset times':'Calculated from your coordinates using SunCalc'}</Text>
-            </View>
-            <Switch value={useManualTime} onValueChange={(v)=>{
-              if (v) {
-                // Switching from Auto to Manual: pre-fill the fields with current calculated values
-                const latN = parseFloat(lat) || config.lat;
-                const lngN = parseFloat(lng) || config.lng;
-                const calc = calcSunrise(latN, lngN);
-                const [srHh, srMm] = calc.sunriseStr.split(':');
-                const [ssHh, ssMm] = calc.sunsetStr.split(':');
-                setSrH(srHh); setSrM(srMm);
-                setSsH(ssHh); setSsM(ssMm);
-              }
-              setUseManualTime(v);
-            }} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={useManualTime?C.gold:'#6a4a8a'}/>
+          <View style={ss.tabRow}>
+            <TouchableOpacity onPress={()=>{
+              setUseManualTime(false);
+            }} style={[ss.tabBtn, !useManualTime && ss.tabBtnActive]}>
+              <Text style={[ss.tabBtnText, !useManualTime && {color:C.gold}]}>🌐  Auto</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={()=>{
+              // When switching to Manual, prefill with current calculated values
+              const latN = parseFloat(lat) || config.lat;
+              const lngN = parseFloat(lng) || config.lng;
+              const calc = calcSunrise(latN, lngN);
+              const [srHh, srMm] = calc.sunriseStr.split(':');
+              const [ssHh, ssMm] = calc.sunsetStr.split(':');
+              setSrH(srHh); setSrM(srMm);
+              setSsH(ssHh); setSsM(ssMm);
+              setUseManualTime(true);
+            }} style={[ss.tabBtn, useManualTime && ss.tabBtnActive]}>
+              <Text style={[ss.tabBtnText, useManualTime && {color:C.gold}]}>⏰  Manual</Text>
+            </TouchableOpacity>
           </View>
-          {!useManualTime && (
-            <View style={{padding:14,borderTopWidth:0.5,borderColor:'#3a1a5a'}}>
-              <Text style={{fontSize:14,color:C.gold}}>🌅 {config.sunriseStr}  ·  🌇 {config.sunsetStr}</Text>
-            </View>
-          )}
-          {useManualTime && <>
-            <View style={ss.useCalcRow}>
-              <Text style={{fontSize:12,color:C.muted,flex:1}}>From SunCalc: 🌅 {config.sunriseStr}  ·  🌇 {config.sunsetStr}</Text>
-              <TouchableOpacity onPress={() => {
-                // Compute fresh values from current lat/lng (or fallback to config)
-                const latN = parseFloat(lat) || config.lat;
-                const lngN = parseFloat(lng) || config.lng;
-                const calc = calcSunrise(latN, lngN);
-                const [srHh, srMm] = calc.sunriseStr.split(':');
-                const [ssHh, ssMm] = calc.sunsetStr.split(':');
-                setSrH(srHh); setSrM(srMm);
-                setSsH(ssHh); setSsM(ssMm);
-              }} style={ss.useCalcBtn}>
-                <Text style={{fontSize:12,color:C.gold,fontWeight:'500'}}>⤴ Use calculated</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={ss.inputRow}><View style={{flex:1}}><Text style={s.settingTitle}>Sunrise (HH:MM)</Text></View><View style={ss.timeRow}><TextInput style={[ss.input,ss.timePart]} value={srH} onChangeText={setSrH} keyboardType="numeric" maxLength={2}/><Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>:</Text><TextInput style={[ss.input,ss.timePart]} value={srM} onChangeText={setSrM} keyboardType="numeric" maxLength={2}/></View></View>
-            <View style={[ss.inputRow,{borderBottomWidth:0}]}><View style={{flex:1}}><Text style={s.settingTitle}>Sunset (HH:MM)</Text></View><View style={ss.timeRow}><TextInput style={[ss.input,ss.timePart]} value={ssH} onChangeText={setSsH} keyboardType="numeric" maxLength={2}/><Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>:</Text><TextInput style={[ss.input,ss.timePart]} value={ssM} onChangeText={setSsM} keyboardType="numeric" maxLength={2}/></View></View>
-          </>}
+          <View style={ss.tabBody}>
+            {!useManualTime && (
+              <>
+                <Text style={{fontSize:11,color:C.muted,marginBottom:4}}>Calculated from your location:</Text>
+                <Text style={{fontSize:16,color:C.gold,fontWeight:'500'}}>🌅 {config.sunriseStr}  ·  🌇 {config.sunsetStr}</Text>
+              </>
+            )}
+            {useManualTime && (
+              <>
+                <View style={ss.manualRow}>
+                  <Text style={ss.manualLabel}>Sunrise</Text>
+                  <View style={ss.timeRow}>
+                    <TextInput style={[ss.input,ss.timePart]} value={srH} onChangeText={setSrH} keyboardType="numeric" maxLength={2}/>
+                    <Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>:</Text>
+                    <TextInput style={[ss.input,ss.timePart]} value={srM} onChangeText={setSrM} keyboardType="numeric" maxLength={2}/>
+                  </View>
+                </View>
+                <View style={ss.manualRow}>
+                  <Text style={ss.manualLabel}>Sunset</Text>
+                  <View style={ss.timeRow}>
+                    <TextInput style={[ss.input,ss.timePart]} value={ssH} onChangeText={setSsH} keyboardType="numeric" maxLength={2}/>
+                    <Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>:</Text>
+                    <TextInput style={[ss.input,ss.timePart]} value={ssM} onChangeText={setSsM} keyboardType="numeric" maxLength={2}/>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={() => {
+                  const latN = parseFloat(lat) || config.lat;
+                  const lngN = parseFloat(lng) || config.lng;
+                  const calc = calcSunrise(latN, lngN);
+                  const [srHh, srMm] = calc.sunriseStr.split(':');
+                  const [ssHh, ssMm] = calc.sunsetStr.split(':');
+                  setSrH(srHh); setSrM(srMm);
+                  setSsH(ssHh); setSsM(ssMm);
+                }} style={[ss.modeBtnInline,{marginTop:6}]}>
+                  <Text style={{fontSize:13,color:C.gold,fontWeight:'500'}}>⤴  Reset to calculated ({config.sunriseStr})</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         </View>
 
         <Text style={s.sectionLabel}>⏱️  Tattva Duration System</Text>
@@ -908,8 +932,8 @@ function InnerApp() {
 
         // Build list of TATTVA and NADI transitions in the next 24h.
         // Walk minute-by-minute, detect when value changes from previous.
-        // Skip the first 2 minutes — those may already have fired (or be just about
-        // to fire), and re-scheduling them creates duplicate "ghost" notifications.
+        // Skip the first 5 minutes — anything that close may have just fired
+        // or be in the queue; re-scheduling creates duplicate "ghost" notifications.
         const txs = []; // {dm, type:'tattva'|'nadi', toId}
         let lastTat = tattvaAt(0).id;
         let lastNadi = nadiAt(0);
@@ -917,14 +941,14 @@ function InnerApp() {
           if (config.notifs?.tattva) {
             const t = tattvaAt(dm).id;
             if (t !== lastTat) {
-              if (dm >= 2) txs.push({ dm, type:'tattva', toId: t });
+              if (dm >= 5) txs.push({ dm, type:'tattva', toId: t });
               lastTat = t;
             }
           }
           if (config.notifs?.nadi) {
             const n = nadiAt(dm);
             if (n !== lastNadi) {
-              if (dm >= 2) txs.push({ dm, type:'nadi', toId: n });
+              if (dm >= 5) txs.push({ dm, type:'nadi', toId: n });
               lastNadi = n;
             }
           }
@@ -976,11 +1000,14 @@ function InnerApp() {
       } catch(e) {}
     };
 
-    scheduleAll();
-    // Re-schedule periodically while app is open (every 5 min) to keep the
-    // pipeline fresh as time passes and old notifications fire.
-    const id = setInterval(scheduleAll, 5*60*1000);
-    return () => clearInterval(id);
+    // Debounce: wait 1.5s after deps change before re-scheduling. This avoids
+    // cancel/reschedule storms when user toggles several settings in a row, or
+    // when Apply changes multiple config keys at once.
+    const debouncedId = setTimeout(scheduleAll, 1500);
+    // Also re-schedule every 10 min while app is open to keep the pipeline fresh
+    // as old notifications fire and the 24h window slides forward.
+    const intervalId = setInterval(scheduleAll, 10*60*1000);
+    return () => { clearTimeout(debouncedId); clearInterval(intervalId); };
   }, [config.sunriseMin, isGhatika, config.notifs?.nadi, config.notifs?.tattva]);
 
   const screens = {
@@ -1124,6 +1151,11 @@ const ss = StyleSheet.create({
   modeBtnInline:{ backgroundColor:C.bg, borderWidth:0.5, borderColor:C.gold, borderRadius:10, paddingVertical:10, alignItems:'center' },
   manualRow:    { flexDirection:'row', alignItems:'center', justifyContent:'space-between', paddingVertical:8 },
   manualLabel:  { fontSize:14, color:C.goldLight, flex:1 },
+  tabRow:       { flexDirection:'row', backgroundColor:'#1f0830', borderTopLeftRadius:14, borderTopRightRadius:14 },
+  tabBtn:       { flex:1, paddingVertical:14, alignItems:'center', borderBottomWidth:2, borderColor:'transparent' },
+  tabBtnActive: { borderColor:C.gold, backgroundColor:C.purple },
+  tabBtnText:   { fontSize:14, color:C.muted, fontWeight:'500' },
+  tabBody:      { padding:14 },
   useCalcRow:   { flexDirection:'row', alignItems:'center', padding:12, paddingHorizontal:16, borderTopWidth:0.5, borderBottomWidth:0.5, borderColor:'#3a1a5a', gap:10 },
   useCalcBtn:   { paddingVertical:6, paddingHorizontal:12, borderRadius:8, backgroundColor:C.purple, borderWidth:0.5, borderColor:C.gold },
   inputRow:     { flexDirection:'row', alignItems:'center', justifyContent:'space-between', padding:14, paddingHorizontal:16, borderBottomWidth:0.5, borderColor:'#3a1a5a' },
