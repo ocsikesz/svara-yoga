@@ -135,8 +135,11 @@ function getSvaraFromSunrise(sunriseMin, lunarDay, paksha) {
   const now = new Date();
   const nowMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
   const minFromSunrise = nowMin - sunriseMin;
-  if (minFromSunrise < 0 || minFromSunrise > 720) return 'sushumna';
-  const cyclePos = minFromSunrise % 120;
+  // The svara cycle continues all 24h until next sunrise — not just 12h.
+  // Use modulo 1440 (24h) so before-sunrise hours roll back into the previous day's cycle.
+  const adjusted = ((minFromSunrise % 1440) + 1440) % 1440;
+  const cyclePos = adjusted % 120;
+  // 2-min Sushumna window at the start of each 60-min half
   if (cyclePos < 2 || (cyclePos >= 60 && cyclePos < 62)) return 'sushumna';
   const lunarEntry = LUNAR_DAYS.find(d => d.day === lunarDay);
   const startNadi = lunarEntry ? lunarEntry.nadi : 'ida';
@@ -149,9 +152,10 @@ function getTattvaFromSunrise(sunriseMin, isGhatika) {
   const now = new Date();
   const nowMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
   const minFromSunrise = nowMin - sunriseMin;
-  if (minFromSunrise < 0) return seq[0];
+  // Cycle 24h: before sunrise, roll back into yesterday's cycle continuation
+  const adjusted = ((minFromSunrise % 1440) + 1440) % 1440;
   const cycleDur = isGhatika ? 120 : 60;
-  const pos = minFromSunrise % cycleDur;
+  const pos = adjusted % cycleDur;
   let elapsed = 0;
   for (const t of seq) {
     elapsed += isGhatika ? t.ghatika : t.classic;
