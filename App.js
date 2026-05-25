@@ -147,6 +147,43 @@ function getSvaraFromSunrise(sunriseMin, lunarDay, paksha) {
   return startNadi === 'ida' ? 'pingala' : 'ida';
 }
 
+// Returns { nextNadi, minutesUntil } — the next DIFFERENT nadi (skipping the
+// brief Sushumna windows) and how many minutes until it begins.
+function getNextNadiChange(sunriseMin, lunarDay) {
+  const now = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
+  const lunarEntry = LUNAR_DAYS.find(d => d.day === lunarDay);
+  const startNadi = lunarEntry ? lunarEntry.nadi : 'ida';
+  const nadiAt = (m) => {
+    const minFromSR = m - sunriseMin;
+    const adjusted = ((minFromSR % 1440) + 1440) % 1440;
+    const cyclePos = adjusted % 120;
+    if (cyclePos < 2 || (cyclePos >= 60 && cyclePos < 62)) return 'sushumna';
+    if (cyclePos < 60) return startNadi;
+    return startNadi === 'ida' ? 'pingala' : 'ida';
+  };
+  const current = nadiAt(nowMin);
+  // Walk forward minute by minute until we hit a different, non-sushumna nadi
+  for (let dm = 1; dm <= 1440; dm++) {
+    const future = nadiAt(nowMin + dm);
+    if (future !== 'sushumna' && future !== current) {
+      return { nextNadi: future, minutesUntil: dm };
+    }
+  }
+  return { nextNadi: current, minutesUntil: 0 };
+}
+
+// Format minutes as "30 minutes" or "1 hour 3 minutes"
+function formatDuration(mins) {
+  const m = Math.round(mins);
+  if (m < 60) return m + (m === 1 ? ' minute' : ' minutes');
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  let str = h + (h === 1 ? ' hour' : ' hours');
+  if (rem > 0) str += ' ' + rem + (rem === 1 ? ' minute' : ' minutes');
+  return str;
+}
+
 function getTattvaFromSunrise(sunriseMin, isGhatika) {
   const seq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
   const now = new Date();
@@ -190,6 +227,7 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
   const [autoSvara,    setAutoSvara]    = useState(() => getSvaraFromSunrise(sunriseMin, lunar.day, lunar.paksha));
   const [activeTattva, setActiveTattva] = useState(() => getTattvaFromSunrise(sunriseMin, isGhatika));
   const [progress,     setProgress]     = useState(() => getTattvaProgress(sunriseMin, isGhatika, getTattvaFromSunrise(sunriseMin, isGhatika)));
+  const [nextNadi,     setNextNadi]     = useState(() => getNextNadiChange(sunriseMin, lunar.day));
   const [now,          setNow]          = useState(new Date());
 
   useEffect(() => {
@@ -199,6 +237,7 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
       setAutoSvara(getSvaraFromSunrise(sunriseMin, l.day, l.paksha));
       setActiveTattva(t);
       setProgress(getTattvaProgress(sunriseMin, isGhatika, t));
+      setNextNadi(getNextNadiChange(sunriseMin, l.day));
       setNow(new Date());
     };
     tick();
@@ -249,6 +288,9 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
         <Text style={s.svaraLabel}>{manualSvara?'Active Now (Manual)':'Active Svara'}</Text>
         <Text style={s.svaraName}>{sm.name}</Text>
         <View style={s.badge}><Text style={s.badgeText}>{sm.tag}</Text></View>
+        <Text style={s.nextNadiText}>
+          Next: {SVARA_META[nextNadi.nextNadi].name.replace(' Nadi','')} in {formatDuration(nextNadi.minutesUntil)}
+        </Text>
       </View>
 
       {manualSvara && manualSvara !== autoSvara && (
@@ -1076,6 +1118,7 @@ const td = StyleSheet.create({
 
 const s = StyleSheet.create({
   svaraCard:    { margin:16, marginBottom:12, backgroundColor:C.bgCard, borderRadius:16, borderWidth:1, borderColor:C.gold, paddingVertical:20, paddingHorizontal:16, alignItems:'center' },
+  nextNadiText: { fontSize:13, color:C.muted, marginTop:12, textAlign:'center' },
   svaraLabel:   { fontSize:12, color:C.muted, textTransform:'uppercase', letterSpacing:1.2, marginBottom:8 },
   svaraName:    { fontSize:28, fontWeight:'500', color:C.gold, letterSpacing:0.5 },
   badge:        { marginTop:10, paddingVertical:6, paddingHorizontal:16, borderRadius:20, backgroundColor:C.purple, borderWidth:0.5, borderColor:C.purpleBorder },
