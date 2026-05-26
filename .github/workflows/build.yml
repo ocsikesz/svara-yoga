@@ -1,8 +1,6 @@
 name: Build Android APK
 on:
-  workflow_dispatch:      # Manual only — runs ONLY when you click "Run workflow"
-                          # in the Actions tab. No longer builds automatically
-                          # on every push (saves your free Actions minutes).
+  workflow_dispatch:      # Manual only — click "Run workflow" in the Actions tab.
 
 permissions:
   contents: write
@@ -14,6 +12,29 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # ── Setup WITHOUT external setup-* actions ───────────────────────────
+      # ubuntu-latest ships with Node 20, Java 17 and the Android SDK already
+      # installed. We point to them directly, avoiding the codeload download
+      # of setup-node / setup-java / setup-android that was failing.
+      - name: Show pre-installed tool versions
+        run: |
+          echo "Node: $(node -v)"
+          echo "npm:  $(npm -v)"
+          echo "Java: $(java -version 2>&1 | head -1)"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+
+      - name: Ensure Java 17 is selected
+        run: |
+          JAVA17=$(ls -d /usr/lib/jvm/temurin-17* /usr/lib/jvm/*17* 2>/dev/null | head -1)
+          if [ -z "$JAVA17" ]; then
+            sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
+            JAVA17=$(ls -d /usr/lib/jvm/*17* | head -1)
+          fi
+          echo "JAVA_HOME=$JAVA17" >> "$GITHUB_ENV"
+          echo "$JAVA17/bin" >> "$GITHUB_PATH"
+          echo "Selected JAVA_HOME=$JAVA17"
 
       - name: Compute version
         id: version
@@ -29,18 +50,7 @@ jobs:
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "full=${FULL}"          >> "$GITHUB_OUTPUT"
           echo "apk_name=svara-yoga-v${FULL}.apk" >> "$GITHUB_OUTPUT"
-          echo "📦 Building Svara Yoga v${FULL} (commit ${SHORT_SHA})"
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - uses: android-actions/setup-android@v3
+          echo "Building Svara Yoga v${FULL} (commit ${SHORT_SHA})"
 
       - name: Install dependencies
         run: npm install
@@ -99,23 +109,18 @@ jobs:
           retention-days: 90
 
       - name: Create GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.full }}
           name: Svara Yoga v${{ steps.version.outputs.full }}
           body: |
-            🕉️ **Svara Yoga v${{ steps.version.outputs.full }}**
+            Svara Yoga v${{ steps.version.outputs.full }}
 
-            - Base version: `${{ steps.version.outputs.base }}`
-            - Build number: `${{ steps.version.outputs.build }}`
-            - Commit: `${{ steps.version.outputs.short_sha }}`
+            - Base version: ${{ steps.version.outputs.base }}
+            - Build number: ${{ steps.version.outputs.build }}
+            - Commit: ${{ steps.version.outputs.short_sha }}
 
-            ### 📥 Install
-            Download the APK below, uninstall any older version on your phone, then install.
-
-            ### 📝 Changes
-            See commit: ${{ github.event.head_commit.message }}
+            Download the APK below, uninstall any older version, then install.
           files: dist/${{ steps.version.outputs.apk_name }}
           draft: false
           prerelease: false
