@@ -614,6 +614,7 @@ function LunarScreen() {
 // ── TIMELINE ──────────────────────────────────────────────────────────────────
 function TimelineScreen({ config, isGhatika }) {
   const [timeline, setTimeline] = useState(() => getTattvaTimeline(config.sunriseMin, isGhatika, 8));
+  const [expanded, setExpanded] = useState(null);
   useEffect(() => {
     const tick = () => setTimeline(getTattvaTimeline(config.sunriseMin, isGhatika, 8));
     tick();
@@ -626,12 +627,15 @@ function TimelineScreen({ config, isGhatika }) {
       <AppHeader subtitle="Tattwa Timeline"/>
       <View style={{padding:14}}>
         <Text style={{fontSize:12,color:C.muted,textTransform:'uppercase',letterSpacing:1.5,marginBottom:4,marginLeft:4}}>Current & Next Tattwas</Text>
-        <Text style={{fontSize:13,color:C.faint,marginBottom:14,marginLeft:4}}>{isGhatika?'Ghatika system · 24 min each':'Classic system'}</Text>
+        <Text style={{fontSize:13,color:C.faint,marginBottom:14,marginLeft:4}}>{isGhatika?'Ghatika system · 24 min each':'Classic system'} · tap any for details</Text>
 
-        {timeline.map((item, i) => (
-          <View key={i} style={[
+        {timeline.map((item, i) => {
+          const showDesc = item.isNow || expanded === i;
+          return (
+          <TouchableOpacity key={i} activeOpacity={0.7} onPress={()=>setExpanded(expanded===i?null:(item.isNow?null:i))} style={[
             tl.row,
             item.isNow && tl.rowNow,
+            (!item.isNow && expanded===i) && {borderColor:item.tattva.color,borderWidth:1},
           ]}>
             <View style={tl.timeCol}>
               <Text style={[tl.time, item.isNow && {color:C.gold,fontWeight:'700'}]}>{item.isNow ? item.startedAt : item.time}</Text>
@@ -642,10 +646,12 @@ function TimelineScreen({ config, isGhatika }) {
             <View style={tl.tattvaCol}>
               <Text style={[tl.tattvaName, item.isNow && {color:C.gold}]}>{item.tattva.name}</Text>
               {item.isNow && <Text style={[tl.until,{color:C.gold,marginTop:0}]}>● active now</Text>}
-              {item.isNow && <Text style={tl.tattvaDesc} numberOfLines={3}>{item.tattva.description}</Text>}
+              {showDesc && <Text style={tl.tattvaDesc}>{item.tattva.description}</Text>}
+              {!item.isNow && expanded!==i && <Text style={[tl.until,{marginTop:2}]}>tap for details ▾</Text>}
             </View>
-          </View>
-        ))}
+          </TouchableOpacity>
+          );
+        })}
 
         <Text style={{fontSize:11,color:C.faint,textAlign:'center',marginTop:16,fontStyle:'italic'}}>
           The cycle repeats every {isGhatika?'2 hours':'1 hour'} from sunrise, continuing through the night until the next sunrise.
