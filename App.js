@@ -220,6 +220,31 @@ function getTattvaProgress(sunriseMin, isGhatika, tattva) {
   return { remaining:0, duration:0, percent:0 };
 }
 
+// ── SHARED HEADER ───────────────────────────────────────────────────────────
+// Logo + page subtitle + current time, shown on every screen.
+function AppHeader({ subtitle }) {
+  const [timeStr, setTimeStr] = useState(() => {
+    const n = new Date();
+    return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  });
+  useEffect(() => {
+    const id = setInterval(() => {
+      const n = new Date();
+      setTimeStr(`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`);
+    }, 10000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <View style={hd.header}>
+      <Image source={require('./assets/logo-header.png')} style={hd.logoHeader} resizeMode="contain"/>
+      <View style={hd.headerRow}>
+        <Text style={hd.subtitle}>{subtitle}</Text>
+        <Text style={hd.timeLabel}>🕐 {timeStr}</Text>
+      </View>
+    </View>
+  );
+}
+
 // ── HOME ──────────────────────────────────────────────────────────────────────
 function HomeScreen({ config, isGhatika, manualSvara }) {
   const { sunriseMin, sunriseStr, sunsetStr, locationMode, sunriseMode } = config;
@@ -246,7 +271,6 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
   }, [sunriseMin, isGhatika]);
 
   const svara = manualSvara || autoSvara;
-  const timeStr = now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false });
   const seq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
   const nextTattva = seq[(seq.findIndex(t=>t.id===activeTattva.id)+1) % seq.length];
 
@@ -260,13 +284,7 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
 
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <View style={hd.header}>
-        <Image source={require('./assets/logo-header.png')} style={hd.logoHeader} resizeMode="contain"/>
-        <View style={hd.headerRow}>
-          <Text style={hd.subtitle}>{lunar.paksha==='shukla'?'Shukla':'Krishna'} · Day {lunar.day}</Text>
-          <Text style={hd.timeLabel}>🕐 {timeStr}</Text>
-        </View>
-      </View>
+      <AppHeader subtitle={`${lunar.paksha==='shukla'?'Shukla':'Krishna'} · Day ${lunar.day}`}/>
 
       <View style={hd.sunBig}>
         <View style={hd.sunItem}>
@@ -376,7 +394,7 @@ function SvaraScreen({ picked, setPicked }) {
   const toggle = (id) => setPicked(picked === id ? null : id);
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <View style={s.screenHeader}><Text style={s.screenTitle}>Svara Identifier</Text><Text style={s.screenDesc}>Detect your active nadi right now</Text></View>
+      <AppHeader subtitle="Svara Identifier"/>
       <View style={s.card}>
         {[{n:1,t:'Close your right nostril. Breathe in gently through the left.'},{n:2,t:'Close your left nostril. Breathe in through the right.'},{n:3,t:'Notice which side flows more freely and smoothly.'},{n:4,t:'Hold your wrist under each nostril — feel the breath warmth.'}].map(st=>
           <Text key={st.n} style={s.step}><Text style={{color:C.gold,fontWeight:'bold'}}>Step {st.n}:  </Text>{st.t}</Text>
@@ -426,7 +444,7 @@ function LunarScreen() {
 
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <View style={s.screenHeader}><Text style={s.screenTitle}>Lunar Cycle Guide</Text><Text style={s.screenDesc}>Tithi · Nadi · Practice  ·  tap any day below</Text></View>
+      <AppHeader subtitle="Lunar Cycle Guide"/>
 
       <View style={s.card}>
         <View style={{flexDirection:'row',gap:14,marginBottom:10}}>
@@ -465,7 +483,7 @@ function ShlokasScreen() {
   const verseOfDay = SHLOKAS[dayOfYear % SHLOKAS.length];
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <View style={s.screenHeader}><Text style={s.screenTitle}>Shlokas & Teachings</Text><Text style={s.screenDesc}>Key verses — tap to expand</Text></View>
+      <AppHeader subtitle="Shlokas & Teachings"/>
       <View style={{padding:14}}>
         <View style={[s.shlokaCard,{borderColor:C.gold,borderWidth:1,backgroundColor:C.purple}]}>
           <Text style={{fontSize:11,color:C.gold,textTransform:'uppercase',letterSpacing:1.5,marginBottom:8}}>★ Verse of the Day</Text>
@@ -592,7 +610,7 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
 
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <View style={s.screenHeader}><Text style={s.screenTitle}>Settings</Text><Text style={s.screenDesc}>Location & sunrise · notifications</Text></View>
+      <AppHeader subtitle="Settings"/>
       <View style={{padding:14,gap:14}}>
 
         <Text style={s.sectionLabel}>📍  Location</Text>
