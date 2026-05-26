@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform, Image, Linking } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SunCalc from 'suncalc';
@@ -52,11 +52,71 @@ const TATTVAS_GHATIKA = [
   { id:'prithvi', name:'Prithvi', emoji:'🌍', classic:20, ghatika:24, color:'#8B5E3C', sense:'Smell · Gandha',  chakra:'Muladhara · Root',        symbol:'Square',   description:'Earth element brings stability, patience and endurance. Ideal for planting, construction and long-term planning.' },
 ];
 
+// Teachings paraphrased in our own words from the Shiva Svarodaya tradition.
+// These are NOT copied translations — the full Sanskrit text with a proper
+// English translation is in: "Swara Yoga: The Tantric Science of Brain
+// Breathing" by Swami Muktibodhananda (Bihar School of Yoga). See the source
+// card at the bottom of this screen. Verse numbers are approximate references
+// to where each theme appears in the 395-sutra text.
 const SHLOKAS = [
-  { verse:9,   topic:'Svara as Supreme Knowledge', sanskrit:'स्वरे शास्त्राणि विद्यन्ते', meaning:'In svara lies all knowledge; in svara resides the highest music. Svara is the very essence of the Vedas.' },
-  { verse:47,  topic:'Ida vs Pingala',              sanskrit:'इडायां शुभकार्याणि पिङ्गलायां च दारुणम्', meaning:'During Ida, perform auspicious and gentle deeds. During Pingala, undertake fierce and strenuous activities.' },
-  { verse:82,  topic:'Pancha Tattva',               sanskrit:'पृथ्वी-तत्त्वे स्थिरं कार्यं', meaning:'Earth gives stability. Water brings auspicious results. Fire destroys; Air leads to travel; Ether grants liberation.' },
-  { verse:116, topic:'Sushumna',                    sanskrit:'सुषुम्नायां न कार्याणि', meaning:'During Sushumna, avoid worldly tasks. Use this moment only for meditation and devotion.' },
+  // ── Foundations ──
+  { verse:1,   topic:'The Dialogue Begins',      sanskrit:'', meaning:'The teaching opens as Parvati asks Shiva to reveal the science of the breath — knowledge once kept secret, passed only from teacher to student.' },
+  { verse:9,   topic:'Svara as Supreme Knowledge', sanskrit:'स्वरे शास्त्राणि विद्यन्ते', meaning:'All scriptures, all music, all knowledge are said to rest within the svara — the flow of the breath. To know the breath is to know the cosmos in miniature.' },
+  { verse:12,  topic:'Secrecy of the Science',   sanskrit:'', meaning:'This knowledge is described as the most precious of secrets — to be shared only with the sincere, the devoted, and those who will honour it.' },
+  { verse:15,  topic:'Breath as Life-Force',     sanskrit:'', meaning:'The breath carries prana, the vital force. As the breath moves, so moves the mind; steady the one and you steady the other.' },
+
+  // ── The Three Nadis ──
+  { verse:21,  topic:'The Three Channels',       sanskrit:'इडा पिङ्गला सुषुम्ना', meaning:'Three subtle channels carry the breath: Ida on the left, Pingala on the right, and Sushumna in the centre. From these all rhythms of life unfold.' },
+  { verse:24,  topic:'Ida — The Lunar Channel',  sanskrit:'', meaning:'When breath flows in the left nostril, the cooling lunar current (Ida) is active — calm, nourishing, inward-turning.' },
+  { verse:27,  topic:'Pingala — The Solar Channel', sanskrit:'', meaning:'When breath flows in the right nostril, the heating solar current (Pingala) is active — energetic, outward, ready for action.' },
+  { verse:30,  topic:'Sushumna — The Central Fire', sanskrit:'', meaning:'When both nostrils flow equally, Sushumna awakens. This rare state is the gateway to meditation and higher consciousness.' },
+  { verse:33,  topic:'Reading Your Own Breath',  sanskrit:'', meaning:'Place a finger beneath the nostrils on waking. Notice which side flows more freely — that current colours the hours ahead.' },
+
+  // ── Ida activities ──
+  { verse:47,  topic:'When Ida Flows',           sanskrit:'इडायां शुभकार्याणि', meaning:'While the left breath flows, favour gentle and lasting works: study, healing, planting, acts of kindness, beginning peaceful ventures.' },
+  { verse:50,  topic:'Ida and the Mind',         sanskrit:'', meaning:'The lunar breath quiets the mind and cools the emotions. A good time for reflection, art, and matters of the heart.' },
+  { verse:53,  topic:'Ida for Health',           sanskrit:'', meaning:'Tradition holds that drinking, eating and resting during the left-breath supports digestion and recovery.' },
+
+  // ── Pingala activities ──
+  { verse:58,  topic:'When Pingala Flows',       sanskrit:'पिङ्गलायां च दारुणम्', meaning:'While the right breath flows, favour vigorous works: physical effort, travel, debate, competition, and bold undertakings.' },
+  { verse:61,  topic:'Pingala and Digestion',    sanskrit:'', meaning:'The solar breath kindles the inner fire. Heavier meals are said to digest best while Pingala is active.' },
+  { verse:64,  topic:'Pingala for Courage',      sanskrit:'', meaning:'When willpower and stamina are needed, the right-breath lends its heat. Confront challenges while the sun-channel flows.' },
+
+  // ── Sushumna ──
+  { verse:71,  topic:'When Sushumna Flows',      sanskrit:'सुषुम्नायां न कार्याणि', meaning:'When the central channel opens, set aside worldly tasks. This is the moment for meditation, mantra, and turning within.' },
+  { verse:74,  topic:'The Sacred Pause',         sanskrit:'', meaning:'Sushumna arises briefly as the breath shifts from one nostril to the other. Catch this pause and the mind grows still.' },
+
+  // ── The Five Tattvas ──
+  { verse:82,  topic:'The Five Elements',        sanskrit:'पृथ्वी आपस् तेजस् वायु आकाश', meaning:'Each breath carries one of five elements in turn: Earth, Water, Fire, Air and Ether — each shaping the quality of the moment.' },
+  { verse:85,  topic:'Prithvi — Earth',          sanskrit:'', meaning:'When the Earth element flows, the breath is steady and grounding. Favourable for stable, long-lasting work and important foundations.' },
+  { verse:88,  topic:'Apas — Water',             sanskrit:'', meaning:'When Water flows, the breath is cool and moving. Auspicious for nourishing, creative and flowing activities.' },
+  { verse:91,  topic:'Tejas — Fire',             sanskrit:'', meaning:'When Fire flows, the breath is sharp and hot. A destructive, transforming current — avoid new beginnings; good for cutting away.' },
+  { verse:94,  topic:'Vayu — Air',               sanskrit:'', meaning:'When Air flows, the breath is light and mobile. Favourable for movement, travel, communication and quick exchanges.' },
+  { verse:97,  topic:'Akasha — Ether',           sanskrit:'', meaning:'When Ether flows, the breath is subtle and vast. Worldly action bears little fruit now — best given to meditation and stillness.' },
+  { verse:100, topic:'Recognising the Tattvas',  sanskrit:'', meaning:'The elements may be sensed by the breath\u2019s temperature, direction and texture, and by the colours seen in meditation.' },
+
+  // ── Timing & the Moon ──
+  { verse:108, topic:'The Breath at Sunrise',    sanskrit:'', meaning:'At dawn the dominant nostril sets the tone for the day. The tradition watches the breath especially at sunrise.' },
+  { verse:111, topic:'Bright and Dark Fortnights', sanskrit:'', meaning:'In the waxing fortnight (Shukla) certain days begin with Ida; in the waning (Krishna), the pattern shifts. The moon governs the rhythm.' },
+  { verse:114, topic:'The Lunar Days',           sanskrit:'', meaning:'Each tithi of the lunar month carries its own quality, favouring some actions and discouraging others.' },
+
+  // ── Practice & predictions ──
+  { verse:120, topic:'Victory and the Breath',   sanskrit:'', meaning:'Before any contest or important meeting, note your active breath; tradition gives guidance on which side favours success.' },
+  { verse:123, topic:'The Breath in Travel',     sanskrit:'', meaning:'Stepping out with the favourable nostril and foot is said to smooth a journey. Pause if the breath warns against it.' },
+  { verse:126, topic:'Changing the Breath',      sanskrit:'', meaning:'The flowing nostril can be changed deliberately — by lying on one side, by pressure, or by focused attention — to suit the task at hand.' },
+  { verse:129, topic:'Breath and Decisions',     sanskrit:'', meaning:'Match the action to the current: gentle matters to the lunar breath, forceful matters to the solar, inner work to the central.' },
+  { verse:132, topic:'Healing with Svara',       sanskrit:'', meaning:'Balancing the breath between the two nostrils is said to restore health and harmony to body and mind.' },
+  { verse:138, topic:'Breath and Emotion',       sanskrit:'', meaning:'Agitation often rides the solar breath; calm rides the lunar. Shift the breath and the mood may follow.' },
+
+  // ── Higher aim ──
+  { verse:150, topic:'Balancing the Currents',   sanskrit:'', meaning:'When Ida and Pingala are balanced, Sushumna awakens and the breath becomes a ladder to deeper states.' },
+  { verse:165, topic:'Breath and Consciousness', sanskrit:'', meaning:'The subtle act of breathing influences the level of awareness. To refine the breath is to refine the mind.' },
+  { verse:180, topic:'The Inner Sun and Moon',   sanskrit:'', meaning:'Pingala is the inner sun, Ida the inner moon. Their union in the central channel is the aim of the yogi.' },
+  { verse:200, topic:'Prana and the Universe',   sanskrit:'', meaning:'The same prana that moves the breath moves the stars. The microcosm of the body mirrors the macrocosm.' },
+  { verse:250, topic:'Steadiness of Breath',     sanskrit:'', meaning:'As the breath grows slow and even, the restless mind settles and clarity dawns.' },
+  { verse:300, topic:'The Witness',              sanskrit:'', meaning:'Beyond the moving breath is the unmoving witness. Watch the breath long enough and you glimpse that stillness.' },
+  { verse:360, topic:'Living by the Breath',     sanskrit:'', meaning:'To live attuned to the svara is to move with the cosmic rhythm rather than against it — the heart of this science.' },
+  { verse:395, topic:'The Teaching Concludes',   sanskrit:'', meaning:'Shiva ends by reminding Parvati that this knowledge bears fruit only through practice — observe your own breath, and the truth reveals itself.' },
 ];
 
 const LUNAR_DAYS = [
@@ -239,7 +299,7 @@ function AppHeader({ subtitle }) {
       <Image source={require('./assets/logo-header.png')} style={hd.logoHeader} resizeMode="contain"/>
       <View style={hd.headerRow}>
         <Text style={hd.subtitle}>{subtitle}</Text>
-        <Text style={hd.timeLabel}>🕐 {timeStr}</Text>
+        <Text style={hd.timeLabel}>{timeStr}</Text>
       </View>
     </View>
   );
@@ -284,7 +344,7 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
 
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <AppHeader subtitle={`${lunar.paksha==='shukla'?'Shukla':'Krishna'} · Day ${lunar.day}`}/>
+      <AppHeader subtitle={`${lunar.paksha==='shukla'?'🌒 Shukla':'🌘 Krishna'} · ${(LUNAR_DAYS.find(d=>d.day===lunar.day)||{}).name || ('Day '+lunar.day)}`}/>
 
       <View style={hd.sunBig}>
         <View style={hd.sunItem}>
@@ -492,12 +552,27 @@ function ShlokasScreen() {
         </View>
         {SHLOKAS.map(sh=>(
           <TouchableOpacity key={sh.verse} style={s.shlokaCard} onPress={()=>setExpanded(expanded===sh.verse?null:sh.verse)}>
-            <Text style={{fontSize:12,color:C.faint,marginBottom:6}}>Verse {sh.verse} · {sh.topic}</Text>
+            <Text style={{fontSize:12,color:C.faint,marginBottom:4}}>Sutra ~{sh.verse}</Text>
             <Text style={{fontSize:15,color:C.gold,fontWeight:'500',marginBottom:6}}>{sh.topic}</Text>
+            {sh.sanskrit?<Text style={{fontSize:15,color:C.goldLight,marginBottom:6}}>{sh.sanskrit}</Text>:null}
             {expanded===sh.verse&&<Text style={{fontSize:14,color:'#a08ab0',lineHeight:22,marginBottom:8}}>{sh.meaning}</Text>}
             <Text style={{fontSize:12,color:C.faint}}>{expanded===sh.verse?'▲ collapse':'▼ tap to read meaning'}</Text>
           </TouchableOpacity>
         ))}
+
+        <View style={[s.shlokaCard,{borderColor:C.border,borderWidth:0.5,marginTop:4}]}>
+          <Text style={{fontSize:11,color:C.gold,textTransform:'uppercase',letterSpacing:1.5,marginBottom:8}}>📖 Source</Text>
+          <Text style={{fontSize:13,color:'#a08ab0',lineHeight:20,marginBottom:10}}>
+            These teachings are paraphrased in our own words from the Shiva Svarodaya tradition. The complete original Sanskrit text (395 sutras) with full English translation is published in:
+          </Text>
+          <Text style={{fontSize:14,color:C.gold,fontWeight:'500',marginBottom:2}}>Swara Yoga: The Tantric Science of Brain Breathing</Text>
+          <Text style={{fontSize:13,color:C.muted,marginBottom:2}}>Swami Muktibodhananda</Text>
+          <Text style={{fontSize:13,color:C.muted,marginBottom:12}}>Bihar School of Yoga · Yoga Publications Trust</Text>
+          <TouchableOpacity onPress={()=>Linking.openURL('https://www.biharyoga.net')} style={{backgroundColor:C.purple,borderWidth:0.5,borderColor:C.gold,borderRadius:10,paddingVertical:10,alignItems:'center'}}>
+            <Text style={{fontSize:13,color:C.gold,fontWeight:'500'}}>🔗  biharyoga.net</Text>
+          </TouchableOpacity>
+          <Text style={{fontSize:11,color:C.faint,marginTop:10,fontStyle:'italic'}}>Svara (also spelled Swara) — both are valid transliterations of the Sanskrit स्वर.</Text>
+        </View>
       </View>
     </ScrollView>
   );
