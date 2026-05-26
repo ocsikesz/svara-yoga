@@ -29,11 +29,11 @@ const C = {
 };
 
 const TABS = [
-  { id:'home',     label:'Home',    icon:'🏠' },
-  { id:'svara',    label:'Svara',   icon:'🌬' },
-  { id:'lunar',    label:'Lunar',   icon:'🌙' },
-  { id:'timeline', label:'Timeline', icon:'📋' },
-  { id:'settings', label:'Settings',icon:'⚙️' },
+  { id:'home',     label:'Home',    img:require('./assets/home.png') },
+  { id:'svara',    label:'Svara',   img:require('./assets/svara.png') },
+  { id:'lunar',    label:'Lunar',   img:require('./assets/lunar.png') },
+  { id:'timeline', label:'Tattwa',  img:require('./assets/akasha.png') },
+  { id:'settings', label:'Settings',img:require('./assets/setting.png') },
 ];
 
 const TATTVAS_CLASSIC = [
@@ -51,6 +51,20 @@ const TATTVAS_GHATIKA = [
   { id:'apas',    name:'Apas',    emoji:'💧', classic:16, ghatika:24, color:'#4a8ec2', sense:'Taste · Rasa',    chakra:'Svadhisthana · Sacral',   symbol:'Crescent', description:'Water element brings flow, creativity and auspiciousness. Ideal for healing, romance and all gentle pursuits.' },
   { id:'prithvi', name:'Prithvi', emoji:'🌍', classic:20, ghatika:24, color:'#8B5E3C', sense:'Smell · Gandha',  chakra:'Muladhara · Root',        symbol:'Square',   description:'Earth element brings stability, patience and endurance. Ideal for planting, construction and long-term planning.' },
 ];
+
+// PNG icon maps (require must be static, so we key by id here)
+const TATTVA_IMG = {
+  akasha:  require('./assets/akasha.png'),
+  vayu:    require('./assets/vayu.png'),
+  tejas:   require('./assets/tejas.png'),
+  apas:    require('./assets/apas.png'),
+  prithvi: require('./assets/Prithvi.png'),
+};
+const NADI_IMG = {
+  ida:      require('./assets/ida.png'),
+  pingala:  require('./assets/pingala.png'),
+  sushumna: require('./assets/shushumna.png'),
+};
 
 // Teachings paraphrased in our own words from the Shiva Svarodaya tradition.
 // These are NOT copied translations — the full Sanskrit text with a proper
@@ -284,12 +298,21 @@ function getTattvaTimeline(sunriseMin, isGhatika, limit) {
       const future = new Date(now.getTime() + dm*60000);
       const hh = String(future.getHours()).padStart(2,'0');
       const mm = String(future.getMinutes()).padStart(2,'0');
-      out.push({
+      const row = {
         time: dm === 0 ? 'NOW' : `${hh}:${mm}`,
         tattva: t,
         minutesUntil: dm,
         isNow: dm === 0,
-      });
+      };
+      // For the current (NOW) tattva, walk backwards to find when it started
+      if (dm === 0) {
+        let back = 0;
+        while (back < 1440 && tattvaAt(nowMin - back - 1).id === t.id) { back++; }
+        const startDate = new Date(now.getTime() - back*60000);
+        row.startedAt = `${String(startDate.getHours()).padStart(2,'0')}:${String(startDate.getMinutes()).padStart(2,'0')}`;
+        row.elapsedMin = back;
+      }
+      out.push(row);
       last = t.id;
     }
   }
@@ -385,21 +408,29 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
 
       <View style={hd.sunBig}>
         <View style={hd.sunItem}>
-          <Text style={hd.sunIcon}>🌅</Text>
-          <Text style={hd.sunTime}>{sunriseStr}</Text>
-          <Text style={hd.sunLabelBig}>Sunrise</Text>
+          <View style={hd.sunRow}>
+            <View style={hd.sunTextCol}>
+              <Text style={hd.sunTime}>{sunriseStr}</Text>
+              <Text style={hd.sunLabelBig}>Sunrise</Text>
+            </View>
+            <Image source={require('./assets/sunrise-icon.png')} style={hd.sunImg} resizeMode="contain"/>
+          </View>
         </View>
         <View style={hd.sunDivider}/>
         <View style={hd.sunItem}>
-          <Text style={hd.sunIcon}>🌇</Text>
-          <Text style={hd.sunTime}>{sunsetStr}</Text>
-          <Text style={hd.sunLabelBig}>Sunset</Text>
+          <View style={hd.sunRow}>
+            <View style={hd.sunTextCol}>
+              <Text style={hd.sunTime}>{sunsetStr}</Text>
+              <Text style={hd.sunLabelBig}>Sunset</Text>
+            </View>
+            <Image source={require('./assets/sunset-icon.png')} style={hd.sunImg} resizeMode="contain"/>
+          </View>
         </View>
       </View>
-      <Text style={hd.srcLabel}>{srcLabel} · {isGhatika?'Ghatika':'Classic'} system</Text>
 
       <View style={s.svaraCard}>
         <Text style={s.svaraLabel}>{manualSvara?'Active Now (Manual)':'Active Svara'}</Text>
+        <Image source={NADI_IMG[svara]} style={s.svaraIconImg} resizeMode="contain"/>
         <Text style={s.svaraName}>{sm.name}</Text>
         <View style={s.badge}><Text style={s.badgeText}>{sm.tag}</Text></View>
         <Text style={s.nextNadiText}>
@@ -429,7 +460,7 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
       <View style={s.tattvaRow}>
         {seq.map(t=>(
           <View key={t.id} style={[s.tattvaPill, activeTattva.id===t.id && s.tattvaPillActive]}>
-            <Text style={s.tattvaIcon}>{t.emoji}</Text>
+            <Image source={TATTVA_IMG[t.id]} style={s.tattvaIconImg} resizeMode="contain"/>
             <Text style={[s.tattvaName, activeTattva.id===t.id&&{color:C.gold}]}>{t.name}</Text>
             {activeTattva.id===t.id && <Text style={{fontSize:11,color:C.gold,marginTop:3,fontWeight:'500'}}>{progress.remaining}m</Text>}
           </View>
@@ -438,9 +469,9 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
 
       <View style={[td.card,{borderColor:activeTattva.color}]}>
         <View style={td.topRow}>
-          <View style={[td.colorDot,{backgroundColor:activeTattva.color}]}/>
+          <Image source={TATTVA_IMG[activeTattva.id]} style={td.iconImg} resizeMode="contain"/>
           <View style={{flex:1}}>
-            <Text style={td.name}>{activeTattva.emoji}  {activeTattva.name}</Text>
+            <Text style={td.name}>{activeTattva.name}</Text>
             <Text style={td.chakra}>{activeTattva.chakra}</Text>
           </View>
           <View style={td.symbolBox}><Text style={[td.symbol,{color:activeTattva.color}]}>{activeTattva.symbol}</Text></View>
@@ -578,9 +609,9 @@ function LunarScreen() {
 
 // ── TIMELINE ──────────────────────────────────────────────────────────────────
 function TimelineScreen({ config, isGhatika }) {
-  const [timeline, setTimeline] = useState(() => getTattvaTimeline(config.sunriseMin, isGhatika, 15));
+  const [timeline, setTimeline] = useState(() => getTattvaTimeline(config.sunriseMin, isGhatika, 8));
   useEffect(() => {
-    const tick = () => setTimeline(getTattvaTimeline(config.sunriseMin, isGhatika, 15));
+    const tick = () => setTimeline(getTattvaTimeline(config.sunriseMin, isGhatika, 8));
     tick();
     const id = setInterval(tick, 20000);
     return () => clearInterval(id);
@@ -588,9 +619,9 @@ function TimelineScreen({ config, isGhatika }) {
 
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <AppHeader subtitle="Tattva Timeline"/>
+      <AppHeader subtitle="Tattwa Timeline"/>
       <View style={{padding:14}}>
-        <Text style={{fontSize:12,color:C.muted,textTransform:'uppercase',letterSpacing:1.5,marginBottom:4,marginLeft:4}}>Next 24 Hours</Text>
+        <Text style={{fontSize:12,color:C.muted,textTransform:'uppercase',letterSpacing:1.5,marginBottom:4,marginLeft:4}}>Current & Next Tattwas</Text>
         <Text style={{fontSize:13,color:C.faint,marginBottom:14,marginLeft:4}}>{isGhatika?'Ghatika system · 24 min each':'Classic system'}</Text>
 
         {timeline.map((item, i) => (
@@ -599,14 +630,15 @@ function TimelineScreen({ config, isGhatika }) {
             item.isNow && tl.rowNow,
           ]}>
             <View style={tl.timeCol}>
-              <Text style={[tl.time, item.isNow && {color:C.gold,fontWeight:'700'}]}>{item.time}</Text>
+              <Text style={[tl.time, item.isNow && {color:C.gold,fontWeight:'700'}]}>{item.isNow ? item.startedAt : item.time}</Text>
               {!item.isNow && <Text style={tl.until}>in {formatDuration(item.minutesUntil)}</Text>}
-              {item.isNow && <Text style={[tl.until,{color:C.gold}]}>active now</Text>}
+              {item.isNow && <Text style={[tl.until,{color:C.gold}]}>{item.elapsedMin>0 ? 'started '+formatDuration(item.elapsedMin)+' ago' : 'just started'}</Text>}
             </View>
-            <View style={[tl.dot, { backgroundColor:item.tattva.color }]}/>
+            <Image source={TATTVA_IMG[item.tattva.id]} style={tl.icon} resizeMode="contain"/>
             <View style={tl.tattvaCol}>
-              <Text style={[tl.tattvaName, item.isNow && {color:C.gold}]}>{item.tattva.emoji}  {item.tattva.name}</Text>
-              {item.isNow && <Text style={tl.tattvaDesc} numberOfLines={2}>{item.tattva.description}</Text>}
+              <Text style={[tl.tattvaName, item.isNow && {color:C.gold}]}>{item.tattva.name}</Text>
+              {item.isNow && <Text style={[tl.until,{color:C.gold,marginTop:0}]}>● active now</Text>}
+              {item.isNow && <Text style={tl.tattvaDesc} numberOfLines={3}>{item.tattva.description}</Text>}
             </View>
           </View>
         ))}
@@ -1203,7 +1235,7 @@ function InnerApp() {
       <View style={[s.bottomNav,{paddingBottom:insets.bottom+8}]}>
         {TABS.map(t=>(
           <TouchableOpacity key={t.id} style={s.navItem} onPress={()=>setActiveTab(t.id)}>
-            <Text style={s.navIcon}>{t.icon}</Text>
+            <Image source={t.img} style={[s.navIconImg, {opacity: activeTab===t.id ? 1 : 0.45}]} resizeMode="contain"/>
             <Text style={[s.navLabel,activeTab===t.id&&{color:C.gold}]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
@@ -1229,6 +1261,9 @@ const hd = StyleSheet.create({
   timeLabel: { fontSize:18, color:C.gold, fontWeight:'500' },
   sunBig:    { flexDirection:'row', alignItems:'center', justifyContent:'space-around', backgroundColor:C.bgDeep, paddingVertical:10, paddingHorizontal:20, borderBottomWidth:0.5, borderColor:C.borderFaint },
   sunItem:   { flex:1, alignItems:'center' },
+  sunRow:    { flexDirection:'row', alignItems:'center', gap:10 },
+  sunTextCol:{ alignItems:'flex-end' },
+  sunImg:    { width:42, height:42 },
   sunDivider:{ width:0.5, height:34, backgroundColor:C.borderFaint },
   sunIcon:   { fontSize:20, marginBottom:2 },
   sunTime:   { fontSize:18, fontWeight:'500', color:C.goldLight, letterSpacing:0.5 },
@@ -1240,6 +1275,7 @@ const td = StyleSheet.create({
   card:     { marginHorizontal:16, marginBottom:12, backgroundColor:C.bgCard, borderRadius:14, borderWidth:1, padding:16 },
   topRow:   { flexDirection:'row', alignItems:'center', gap:12, marginBottom:12 },
   colorDot: { width:16, height:16, borderRadius:8 },
+  iconImg:  { width:48, height:48, marginRight:4 },
   name:     { fontSize:19, fontWeight:'500', color:C.goldLight },
   chakra:   { fontSize:13, color:C.muted, marginTop:3 },
   symbolBox:{ backgroundColor:'#2a1040', borderRadius:8, padding:8 },
@@ -1254,6 +1290,7 @@ const td = StyleSheet.create({
 
 const s = StyleSheet.create({
   svaraCard:    { margin:16, marginBottom:12, backgroundColor:C.bgCard, borderRadius:16, borderWidth:1, borderColor:C.gold, paddingVertical:20, paddingHorizontal:16, alignItems:'center' },
+  svaraIconImg: { width:72, height:72, marginBottom:8 },
   nextNadiText: { fontSize:13, color:C.muted, marginTop:12, textAlign:'center' },
   svaraLabel:   { fontSize:12, color:C.muted, textTransform:'uppercase', letterSpacing:1.2, marginBottom:8 },
   svaraName:    { fontSize:28, fontWeight:'500', color:C.gold, letterSpacing:0.5 },
@@ -1271,6 +1308,7 @@ const s = StyleSheet.create({
   tattvaPill:   { flex:1, backgroundColor:C.bgCard, borderWidth:0.5, borderColor:C.border, borderRadius:12, paddingVertical:14, alignItems:'center' },
   tattvaPillActive:{ backgroundColor:C.purple, borderColor:C.gold },
   tattvaIcon:   { fontSize:22, marginBottom:3 },
+  tattvaIconImg:{ width:34, height:34, marginBottom:3 },
   tattvaName:   { fontSize:12, color:C.muted },
   ddRow:        { flexDirection:'row', marginHorizontal:16, marginBottom:16, gap:8 },
   ddBox:        { flex:1, borderRadius:14, padding:14, borderWidth:0.5 },
@@ -1313,6 +1351,7 @@ const s = StyleSheet.create({
   bottomNav:    { flexDirection:'row', backgroundColor:C.bg, borderTopWidth:0.5, borderColor:C.borderFaint, paddingTop:10 },
   navItem:      { flex:1, alignItems:'center', gap:4 },
   navIcon:      { fontSize:26 },
+  navIconImg:   { width:28, height:28 },
   navLabel:     { fontSize:11, color:C.fainter },
 });
 
@@ -1323,6 +1362,7 @@ const tl = StyleSheet.create({
   time:       { fontSize:16, color:C.goldLight, fontWeight:'500' },
   until:      { fontSize:11, color:C.faint, marginTop:2 },
   dot:        { width:12, height:12, borderRadius:6, marginHorizontal:12 },
+  icon:       { width:40, height:40, marginHorizontal:10 },
   tattvaCol:  { flex:1 },
   tattvaName: { fontSize:16, color:C.goldLight, fontWeight:'500' },
   tattvaDesc: { fontSize:12, color:'#a08ab0', lineHeight:17, marginTop:4 },
