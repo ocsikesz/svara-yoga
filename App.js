@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform, Image } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SunCalc from 'suncalc';
@@ -261,7 +261,7 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
       <View style={hd.header}>
-        <Text style={hd.om}>ॐ</Text>
+        <Image source={require('./assets/logo-square.png')} style={hd.logo} resizeMode="contain"/>
         <View style={hd.center}>
           <Text style={hd.title}>Svara Yoga</Text>
           <Text style={hd.subtitle}>{lunar.paksha==='shukla'?'Shukla':'Krishna'} · Day {lunar.day}</Text>
@@ -1087,6 +1087,7 @@ export default function App() {
 const hd = StyleSheet.create({
   header:    { flexDirection:'row', alignItems:'center', backgroundColor:C.bgDeep, paddingHorizontal:16, paddingVertical:14, borderBottomWidth:0.5, borderColor:C.borderFaint, gap:12 },
   om:        { fontSize:36, color:C.gold },
+  logo:      { width:44, height:44 },
   center:    { flex:1 },
   title:     { fontSize:22, fontWeight:'500', color:C.goldLight, letterSpacing:0.8 },
   subtitle:  { fontSize:13, color:C.muted, marginTop:3 },
