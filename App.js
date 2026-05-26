@@ -486,7 +486,11 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
           <View style={{height:6,width:`${progress.percent}%`,backgroundColor:activeTattva.color,borderRadius:3}}/>
         </View>
         <Text style={td.desc}>{activeTattva.description}</Text>
-        <Text style={{fontSize:12,color:C.faint,marginTop:8}}>Next → {nextTattva.emoji} {nextTattva.name}</Text>
+        <View style={{flexDirection:'row',alignItems:'center',marginTop:8,gap:6}}>
+          <Text style={{fontSize:12,color:C.faint}}>Next →</Text>
+          <Image source={TATTVA_IMG[nextTattva.id]} style={{width:20,height:20}} resizeMode="contain"/>
+          <Text style={{fontSize:12,color:C.faint}}>{nextTattva.name}</Text>
+        </View>
       </View>
 
       <View style={s.moodCard}>
@@ -536,9 +540,9 @@ function SvaraScreen({ picked, setPicked }) {
         )}
       </View>
       <View style={s.btnRow}>
-        {[{id:'ida',label:'Left (Ida)',icon:'🌙'},{id:'pingala',label:'Right (Pingala)',icon:'☀️'},{id:'sushumna',label:'Both equal',icon:'🔥'}].map(b=>(
+        {[{id:'ida',label:'Left (Ida)'},{id:'pingala',label:'Right (Pingala)'},{id:'sushumna',label:'Both equal'}].map(b=>(
           <TouchableOpacity key={b.id} style={[s.svaraBtn,picked===b.id&&s.svaraBtnActive]} onPress={()=>toggle(b.id)}>
-            <Text style={s.svaraBtnIcon}>{b.icon}</Text>
+            <Image source={NADI_IMG[b.id]} style={s.svaraBtnIconImg} resizeMode="contain"/>
             <Text style={[s.svaraBtnLabel,picked===b.id&&{color:C.gold}]}>{b.label}</Text>
           </TouchableOpacity>
         ))}
@@ -879,8 +883,11 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
           </View>
           <View style={{padding:12,borderTopWidth:0.5,borderColor:'#3a1a5a'}}>
             {ghSeq.map(t=>(
-              <View key={t.id} style={{flexDirection:'row',justifyContent:'space-between',marginBottom:4}}>
-                <Text style={{fontSize:11,color:C.muted}}>{t.emoji}  {t.name}</Text>
+              <View key={t.id} style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+                  <Image source={TATTVA_IMG[t.id]} style={{width:22,height:22}} resizeMode="contain"/>
+                  <Text style={{fontSize:12,color:C.muted}}>{t.name}</Text>
+                </View>
                 <Text style={{fontSize:11,color:t.color}}>{isGhatika?t.ghatika:t.classic} min</Text>
               </View>
             ))}
@@ -1329,6 +1336,7 @@ const s = StyleSheet.create({
   svaraBtn:     { flex:1, backgroundColor:C.bgCard, borderWidth:0.5, borderColor:C.border, borderRadius:14, paddingVertical:18, alignItems:'center', gap:6 },
   svaraBtnActive:{ backgroundColor:C.purple, borderColor:C.gold },
   svaraBtnIcon: { fontSize:30 },
+  svaraBtnIconImg: { width:48, height:48, marginBottom:4 },
   svaraBtnLabel:{ fontSize:14, color:C.muted },
   resultBox:    { margin:14, backgroundColor:C.purple, borderRadius:14, borderWidth:0.5, borderColor:C.gold, padding:16 },
   resultTitle:  { fontSize:16, color:C.gold, fontWeight:'500', marginBottom:8 },
