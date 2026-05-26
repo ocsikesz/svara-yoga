@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform, Image, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform, Image } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SunCalc from 'suncalc';
@@ -32,7 +32,7 @@ const TABS = [
   { id:'home',     label:'Home',    icon:'🏠' },
   { id:'svara',    label:'Svara',   icon:'🌬' },
   { id:'lunar',    label:'Lunar',   icon:'🌙' },
-  { id:'shlokas',  label:'Shlokas', icon:'📖' },
+  { id:'timeline', label:'Timeline', icon:'📋' },
   { id:'settings', label:'Settings',icon:'⚙️' },
 ];
 
@@ -261,6 +261,41 @@ function getTattvaFromSunrise(sunriseMin, isGhatika) {
   return seq[seq.length-1];
 }
 
+// Build a timeline of upcoming tattva transitions over the next 24h.
+// Returns array of { time:'NOW'|'HH:MM', tattva:{id,name,emoji}, minutesUntil, isNow }.
+function getTattvaTimeline(sunriseMin, isGhatika, limit) {
+  const seq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
+  const cycleDur = isGhatika ? 120 : 60;
+  const now = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
+  const tattvaAt = (m) => {
+    const mFromSR = m - sunriseMin;
+    const adjusted = ((mFromSR % 1440) + 1440) % 1440;
+    const pos = adjusted % cycleDur;
+    let elapsed = 0;
+    for (const t of seq) { elapsed += isGhatika ? t.ghatika : t.classic; if (pos < elapsed) return t; }
+    return seq[seq.length-1];
+  };
+  const out = [];
+  let last = null;
+  for (let dm = 0; dm <= 1440 && out.length < (limit||15); dm++) {
+    const t = tattvaAt(nowMin + dm);
+    if (last === null || t.id !== last) {
+      const future = new Date(now.getTime() + dm*60000);
+      const hh = String(future.getHours()).padStart(2,'0');
+      const mm = String(future.getMinutes()).padStart(2,'0');
+      out.push({
+        time: dm === 0 ? 'NOW' : `${hh}:${mm}`,
+        tattva: t,
+        minutesUntil: dm,
+        isNow: dm === 0,
+      });
+      last = t.id;
+    }
+  }
+  return out;
+}
+
 function getTattvaProgress(sunriseMin, isGhatika, tattva) {
   const seq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
   const now = new Date();
@@ -333,6 +368,8 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
   const svara = manualSvara || autoSvara;
   const seq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
   const nextTattva = seq[(seq.findIndex(t=>t.id===activeTattva.id)+1) % seq.length];
+  const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(),0,0)) / 86400000);
+  const verseOfDay = SHLOKAS[dayOfYear % SHLOKAS.length];
 
   const SVARA_META = {
     ida:      { name:'Ida Nadi',     tag:'🌙 Lunar · Cooling · Feminine'  },
@@ -440,6 +477,13 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
           )}
         </View>
       </View>
+
+      <View style={[s.shlokaCard,{marginHorizontal:16,marginBottom:20,borderColor:C.gold,borderWidth:0.5,backgroundColor:C.purple}]}>
+        <Text style={{fontSize:11,color:C.gold,textTransform:'uppercase',letterSpacing:1.5,marginBottom:8}}>★ Teaching of the Day</Text>
+        <Text style={{fontSize:13,color:C.muted,marginBottom:6}}>{verseOfDay.topic}{verseOfDay.sanskrit?'  ·  '+verseOfDay.sanskrit:''}</Text>
+        <Text style={{fontSize:15,color:C.gold,fontStyle:'italic',lineHeight:24}}>{verseOfDay.meaning}</Text>
+        <Text style={{fontSize:10,color:C.faint,marginTop:10}}>Shiva Svarodaya · sutra ~{verseOfDay.verse}</Text>
+      </View>
     </ScrollView>
   );
 }
@@ -479,8 +523,6 @@ function LunarScreen() {
   const [selectedDay, setSelectedDay] = useState(day);
 
   const detail   = LUNAR_DAYS.find(x => x.day === selectedDay) || LUNAR_DAYS[0];
-  const nextDay  = (selectedDay % 15) + 1;
-  const nextDetail = LUNAR_DAYS.find(x => x.day === nextDay) || LUNAR_DAYS[0];
 
   const renderCard = (d, label, isToday) => (
     <View style={[s.card,{borderColor:d.nadi==='ida'?'#2a4a7a':'#6a3a1a',borderWidth:1}]}>
@@ -530,49 +572,48 @@ function LunarScreen() {
       </View>
 
       {renderCard(detail, selectedDay===day ? '● Selected · Today' : '● Selected · Day '+selectedDay, selectedDay===day)}
-      {renderCard(nextDetail, '▶ Next · Day '+nextDay, false)}
     </ScrollView>
   );
 }
 
-// ── SHLOKAS ───────────────────────────────────────────────────────────────────
-function ShlokasScreen() {
-  const [expanded, setExpanded] = useState(null);
-  // Pick verse of the day: rotate based on day of year
-  const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(),0,0)) / 86400000);
-  const verseOfDay = SHLOKAS[dayOfYear % SHLOKAS.length];
+// ── TIMELINE ──────────────────────────────────────────────────────────────────
+function TimelineScreen({ config, isGhatika }) {
+  const [timeline, setTimeline] = useState(() => getTattvaTimeline(config.sunriseMin, isGhatika, 15));
+  useEffect(() => {
+    const tick = () => setTimeline(getTattvaTimeline(config.sunriseMin, isGhatika, 15));
+    tick();
+    const id = setInterval(tick, 20000);
+    return () => clearInterval(id);
+  }, [config.sunriseMin, isGhatika]);
+
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <AppHeader subtitle="Shlokas & Teachings"/>
+      <AppHeader subtitle="Tattva Timeline"/>
       <View style={{padding:14}}>
-        <View style={[s.shlokaCard,{borderColor:C.gold,borderWidth:1,backgroundColor:C.purple}]}>
-          <Text style={{fontSize:11,color:C.gold,textTransform:'uppercase',letterSpacing:1.5,marginBottom:8}}>★ Verse of the Day</Text>
-          <Text style={{fontSize:13,color:C.muted,marginBottom:6}}>Verse {verseOfDay.verse} · {verseOfDay.topic}</Text>
-          <Text style={{fontSize:16,color:C.gold,fontStyle:'italic',lineHeight:26}}>{verseOfDay.meaning}</Text>
-        </View>
-        {SHLOKAS.map(sh=>(
-          <TouchableOpacity key={sh.verse} style={s.shlokaCard} onPress={()=>setExpanded(expanded===sh.verse?null:sh.verse)}>
-            <Text style={{fontSize:12,color:C.faint,marginBottom:4}}>Sutra ~{sh.verse}</Text>
-            <Text style={{fontSize:15,color:C.gold,fontWeight:'500',marginBottom:6}}>{sh.topic}</Text>
-            {sh.sanskrit?<Text style={{fontSize:15,color:C.goldLight,marginBottom:6}}>{sh.sanskrit}</Text>:null}
-            {expanded===sh.verse&&<Text style={{fontSize:14,color:'#a08ab0',lineHeight:22,marginBottom:8}}>{sh.meaning}</Text>}
-            <Text style={{fontSize:12,color:C.faint}}>{expanded===sh.verse?'▲ collapse':'▼ tap to read meaning'}</Text>
-          </TouchableOpacity>
+        <Text style={{fontSize:12,color:C.muted,textTransform:'uppercase',letterSpacing:1.5,marginBottom:4,marginLeft:4}}>Next 24 Hours</Text>
+        <Text style={{fontSize:13,color:C.faint,marginBottom:14,marginLeft:4}}>{isGhatika?'Ghatika system · 24 min each':'Classic system'}</Text>
+
+        {timeline.map((item, i) => (
+          <View key={i} style={[
+            tl.row,
+            item.isNow && tl.rowNow,
+          ]}>
+            <View style={tl.timeCol}>
+              <Text style={[tl.time, item.isNow && {color:C.gold,fontWeight:'700'}]}>{item.time}</Text>
+              {!item.isNow && <Text style={tl.until}>in {formatDuration(item.minutesUntil)}</Text>}
+              {item.isNow && <Text style={[tl.until,{color:C.gold}]}>active now</Text>}
+            </View>
+            <View style={[tl.dot, { backgroundColor:item.tattva.color }]}/>
+            <View style={tl.tattvaCol}>
+              <Text style={[tl.tattvaName, item.isNow && {color:C.gold}]}>{item.tattva.emoji}  {item.tattva.name}</Text>
+              {item.isNow && <Text style={tl.tattvaDesc} numberOfLines={2}>{item.tattva.description}</Text>}
+            </View>
+          </View>
         ))}
 
-        <View style={[s.shlokaCard,{borderColor:C.border,borderWidth:0.5,marginTop:4}]}>
-          <Text style={{fontSize:11,color:C.gold,textTransform:'uppercase',letterSpacing:1.5,marginBottom:8}}>📖 Source</Text>
-          <Text style={{fontSize:13,color:'#a08ab0',lineHeight:20,marginBottom:10}}>
-            These teachings are paraphrased in our own words from the Shiva Svarodaya tradition. The complete original Sanskrit text (395 sutras) with full English translation is published in:
-          </Text>
-          <Text style={{fontSize:14,color:C.gold,fontWeight:'500',marginBottom:2}}>Swara Yoga: The Tantric Science of Brain Breathing</Text>
-          <Text style={{fontSize:13,color:C.muted,marginBottom:2}}>Swami Muktibodhananda</Text>
-          <Text style={{fontSize:13,color:C.muted,marginBottom:12}}>Bihar School of Yoga · Yoga Publications Trust</Text>
-          <TouchableOpacity onPress={()=>Linking.openURL('https://www.biharyoga.net')} style={{backgroundColor:C.purple,borderWidth:0.5,borderColor:C.gold,borderRadius:10,paddingVertical:10,alignItems:'center'}}>
-            <Text style={{fontSize:13,color:C.gold,fontWeight:'500'}}>🔗  biharyoga.net</Text>
-          </TouchableOpacity>
-          <Text style={{fontSize:11,color:C.faint,marginTop:10,fontStyle:'italic'}}>Svara (also spelled Swara) — both are valid transliterations of the Sanskrit स्वर.</Text>
-        </View>
+        <Text style={{fontSize:11,color:C.faint,textAlign:'center',marginTop:16,fontStyle:'italic'}}>
+          The cycle repeats every {isGhatika?'2 hours':'1 hour'} from sunrise, continuing through the night until the next sunrise.
+        </Text>
       </View>
     </ScrollView>
   );
@@ -1152,7 +1193,7 @@ function InnerApp() {
     home:     <HomeScreen config={config} isGhatika={isGhatika} manualSvara={manualSvara}/>,
     svara:    <SvaraScreen picked={manualSvara} setPicked={setManualSvara}/>,
     lunar:    <LunarScreen/>,
-    shlokas:  <ShlokasScreen/>,
+    timeline: <TimelineScreen config={config} isGhatika={isGhatika}/>,
     settings: <SettingsScreen config={config} setConfig={setConfig} isGhatika={isGhatika} setIsGhatika={setIsGhatika}/>,
   };
 
@@ -1273,6 +1314,18 @@ const s = StyleSheet.create({
   navItem:      { flex:1, alignItems:'center', gap:4 },
   navIcon:      { fontSize:26 },
   navLabel:     { fontSize:11, color:C.fainter },
+});
+
+const tl = StyleSheet.create({
+  row:        { flexDirection:'row', alignItems:'center', backgroundColor:C.bgCard, borderRadius:12, padding:12, marginBottom:8, borderWidth:0.5, borderColor:C.borderFaint },
+  rowNow:     { borderColor:C.gold, borderWidth:1.5, backgroundColor:C.purple },
+  timeCol:    { width:78 },
+  time:       { fontSize:16, color:C.goldLight, fontWeight:'500' },
+  until:      { fontSize:11, color:C.faint, marginTop:2 },
+  dot:        { width:12, height:12, borderRadius:6, marginHorizontal:12 },
+  tattvaCol:  { flex:1 },
+  tattvaName: { fontSize:16, color:C.goldLight, fontWeight:'500' },
+  tattvaDesc: { fontSize:12, color:'#a08ab0', lineHeight:17, marginTop:4 },
 });
 
 const ss = StyleSheet.create({
