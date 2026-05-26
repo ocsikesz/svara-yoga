@@ -1,8 +1,8 @@
 name: Build Android APK
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_dispatch:      # Manual only — runs ONLY when you click "Run workflow"
+                          # in the Actions tab. No longer builds automatically
+                          # on every push (saves your free Actions minutes).
 
 permissions:
   contents: write
