@@ -262,10 +262,10 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
       <View style={hd.header}>
         <Image source={require('./assets/logo-header.png')} style={hd.logoHeader} resizeMode="contain"/>
-        <View style={hd.center}>
+        <View style={hd.headerRow}>
           <Text style={hd.subtitle}>{lunar.paksha==='shukla'?'Shukla':'Krishna'} · Day {lunar.day}</Text>
+          <Text style={hd.timeLabel}>🕐 {timeStr}</Text>
         </View>
-        <Text style={hd.timeLabel}>🕐 {timeStr}</Text>
       </View>
 
       <View style={hd.sunBig}>
@@ -1084,13 +1084,14 @@ export default function App() {
 
 // ── STYLES ────────────────────────────────────────────────────────────────────
 const hd = StyleSheet.create({
-  header:    { flexDirection:'row', alignItems:'center', backgroundColor:C.bgDeep, paddingHorizontal:16, paddingVertical:14, borderBottomWidth:0.5, borderColor:C.borderFaint, gap:12 },
+  header:    { flexDirection:'column', alignItems:'center', backgroundColor:C.bgDeep, paddingHorizontal:16, paddingVertical:14, borderBottomWidth:0.5, borderColor:C.borderFaint },
   om:        { fontSize:36, color:C.gold },
   logo:      { width:44, height:44 },
-  logoHeader:{ width:170, height:35 },
+  logoHeader:{ width:280, height:58, marginBottom:6 },
+  headerRow: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', width:'100%', paddingHorizontal:8 },
   center:    { flex:1 },
   title:     { fontSize:22, fontWeight:'500', color:C.goldLight, letterSpacing:0.8 },
-  subtitle:  { fontSize:13, color:C.muted, marginTop:3 },
+  subtitle:  { fontSize:13, color:C.muted },
   timeLabel: { fontSize:18, color:C.gold, fontWeight:'500' },
   sunBig:    { flexDirection:'row', alignItems:'center', justifyContent:'space-around', backgroundColor:C.bgDeep, paddingVertical:10, paddingHorizontal:20, borderBottomWidth:0.5, borderColor:C.borderFaint },
   sunItem:   { flex:1, alignItems:'center' },
