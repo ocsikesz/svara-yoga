@@ -1212,31 +1212,42 @@ function InnerApp() {
           if (tx.type === 'tattva') {
             const ti = TATTVA_INFO[tx.toId];
             if (!ti) continue;
-            await Notifications.scheduleNotificationAsync({
-              content: {
-                title: `${ti.emoji}  ${ti.name}`,
-                body:  ti.desc,
-                sound: true,
-                data:  { kind:'svara-tx' },
-                ...androidFields,
-                ...(Platform.OS === 'android' ? { largeIcon: TATTVA_LARGE[tx.toId] } : {}),
-              },
-              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
-            });
+            const baseContent = {
+              title: `${ti.emoji}  ${ti.name}`,
+              body:  ti.desc,
+              sound: true,
+              data:  { kind:'svara-tx' },
+              ...androidFields,
+            };
+            const trig = { seconds: Math.max(1, Math.round(tx.dm*60)) };
+            try {
+              await Notifications.scheduleNotificationAsync({
+                content: { ...baseContent, ...(Platform.OS==='android' && TATTVA_LARGE[tx.toId] ? { largeIcon: TATTVA_LARGE[tx.toId] } : {}) },
+                trigger: trig,
+              });
+            } catch(e) {
+              // largeIcon may be rejected on some platforms — retry plain
+              await Notifications.scheduleNotificationAsync({ content: baseContent, trigger: trig });
+            }
           } else {
             const ni = NADI_INFO[tx.toId];
             if (!ni) continue;
-            await Notifications.scheduleNotificationAsync({
-              content: {
-                title: `${ni.emoji}  ${ni.name}`,
-                body:  ni.desc,
-                sound: true,
-                data:  { kind:'svara-tx' },
-                ...androidFields,
-                ...(Platform.OS === 'android' ? { largeIcon: NADI_LARGE[tx.toId] } : {}),
-              },
-              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
-            });
+            const baseContent = {
+              title: `${ni.emoji}  ${ni.name}`,
+              body:  ni.desc,
+              sound: true,
+              data:  { kind:'svara-tx' },
+              ...androidFields,
+            };
+            const trig = { seconds: Math.max(1, Math.round(tx.dm*60)) };
+            try {
+              await Notifications.scheduleNotificationAsync({
+                content: { ...baseContent, ...(Platform.OS==='android' && NADI_LARGE[tx.toId] ? { largeIcon: NADI_LARGE[tx.toId] } : {}) },
+                trigger: trig,
+              });
+            } catch(e) {
+              await Notifications.scheduleNotificationAsync({ content: baseContent, trigger: trig });
+            }
           }
         }
       } catch(e) {}
