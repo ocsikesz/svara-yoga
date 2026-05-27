@@ -43,13 +43,7 @@
           "locationAlwaysPermission": "Svara Yoga are nevoie de locație pentru acuratețea exercițiilor."
         }
       ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#c9a96e"
-        }
-      ]
+      "expo-notifications"
     ],
     "extra": {
       "eas": {

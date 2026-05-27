@@ -66,22 +66,6 @@ const NADI_IMG = {
   sushumna: require('./assets/shushumna.png'),
 };
 
-// For Android notification largeIcon we need a URI string, not a require handle.
-// Image.resolveAssetSource turns the bundled asset into a {uri} we can pass.
-const _uri = (mod) => { try { return Image.resolveAssetSource(mod).uri; } catch(e){ return undefined; } };
-const TATTVA_LARGE = {
-  akasha:  _uri(TATTVA_IMG.akasha),
-  vayu:    _uri(TATTVA_IMG.vayu),
-  tejas:   _uri(TATTVA_IMG.tejas),
-  apas:    _uri(TATTVA_IMG.apas),
-  prithvi: _uri(TATTVA_IMG.prithvi),
-};
-const NADI_LARGE = {
-  ida:      _uri(NADI_IMG.ida),
-  pingala:  _uri(NADI_IMG.pingala),
-  sushumna: _uri(NADI_IMG.sushumna),
-};
-
 // Teachings paraphrased in our own words from the Shiva Svarodaya tradition.
 // These are NOT copied translations — the full Sanskrit text with a proper
 // English translation is in: "Swara Yoga: The Tantric Science of Brain
@@ -1212,42 +1196,29 @@ function InnerApp() {
           if (tx.type === 'tattva') {
             const ti = TATTVA_INFO[tx.toId];
             if (!ti) continue;
-            const baseContent = {
-              title: `${ti.emoji}  ${ti.name}`,
-              body:  ti.desc,
-              sound: true,
-              data:  { kind:'svara-tx' },
-              ...androidFields,
-            };
-            const trig = { seconds: Math.max(1, Math.round(tx.dm*60)) };
-            try {
-              await Notifications.scheduleNotificationAsync({
-                content: { ...baseContent, ...(Platform.OS==='android' && TATTVA_LARGE[tx.toId] ? { largeIcon: TATTVA_LARGE[tx.toId] } : {}) },
-                trigger: trig,
-              });
-            } catch(e) {
-              // largeIcon may be rejected on some platforms — retry plain
-              await Notifications.scheduleNotificationAsync({ content: baseContent, trigger: trig });
-            }
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: `${ti.emoji}  ${ti.name}`,
+                body:  ti.desc,
+                sound: true,
+                data:  { kind:'svara-tx' },
+                ...androidFields,
+              },
+              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
+            });
           } else {
             const ni = NADI_INFO[tx.toId];
             if (!ni) continue;
-            const baseContent = {
-              title: `${ni.emoji}  ${ni.name}`,
-              body:  ni.desc,
-              sound: true,
-              data:  { kind:'svara-tx' },
-              ...androidFields,
-            };
-            const trig = { seconds: Math.max(1, Math.round(tx.dm*60)) };
-            try {
-              await Notifications.scheduleNotificationAsync({
-                content: { ...baseContent, ...(Platform.OS==='android' && NADI_LARGE[tx.toId] ? { largeIcon: NADI_LARGE[tx.toId] } : {}) },
-                trigger: trig,
-              });
-            } catch(e) {
-              await Notifications.scheduleNotificationAsync({ content: baseContent, trigger: trig });
-            }
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: `${ni.emoji}  ${ni.name}`,
+                body:  ni.desc,
+                sound: true,
+                data:  { kind:'svara-tx' },
+                ...androidFields,
+              },
+              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
+            });
           }
         }
       } catch(e) {}
