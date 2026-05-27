@@ -66,6 +66,22 @@ const NADI_IMG = {
   sushumna: require('./assets/shushumna.png'),
 };
 
+// For Android notification largeIcon we need a URI string, not a require handle.
+// Image.resolveAssetSource turns the bundled asset into a {uri} we can pass.
+const _uri = (mod) => { try { return Image.resolveAssetSource(mod).uri; } catch(e){ return undefined; } };
+const TATTVA_LARGE = {
+  akasha:  _uri(TATTVA_IMG.akasha),
+  vayu:    _uri(TATTVA_IMG.vayu),
+  tejas:   _uri(TATTVA_IMG.tejas),
+  apas:    _uri(TATTVA_IMG.apas),
+  prithvi: _uri(TATTVA_IMG.prithvi),
+};
+const NADI_LARGE = {
+  ida:      _uri(NADI_IMG.ida),
+  pingala:  _uri(NADI_IMG.pingala),
+  sushumna: _uri(NADI_IMG.sushumna),
+};
+
 // Teachings paraphrased in our own words from the Shiva Svarodaya tradition.
 // These are NOT copied translations — the full Sanskrit text with a proper
 // English translation is in: "Swara Yoga: The Tantric Science of Brain
@@ -1203,6 +1219,7 @@ function InnerApp() {
                 sound: true,
                 data:  { kind:'svara-tx' },
                 ...androidFields,
+                ...(Platform.OS === 'android' ? { largeIcon: TATTVA_LARGE[tx.toId] } : {}),
               },
               trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
             });
@@ -1216,6 +1233,7 @@ function InnerApp() {
                 sound: true,
                 data:  { kind:'svara-tx' },
                 ...androidFields,
+                ...(Platform.OS === 'android' ? { largeIcon: NADI_LARGE[tx.toId] } : {}),
               },
               trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
             });
