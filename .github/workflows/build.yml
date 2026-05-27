@@ -71,9 +71,54 @@ jobs:
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
 
-      - name: Sign release with debug key
+      - name: Decode keystore from secret
+        id: keystore
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         run: |
-          cat >> android/app/build.gradle << 'EOF'
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "⚠️  No SIGNING_KEY secret set — using DEBUG signing (not Play-ready)"
+            echo "have_release_key=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "✅ SIGNING_KEY found — decoding release keystore"
+            echo "$SIGNING_KEY" | base64 -d > android/app/release.keystore
+            if [ ! -s android/app/release.keystore ]; then
+              echo "❌ Decoded keystore is empty — check SIGNING_KEY secret"
+              exit 1
+            fi
+            echo "Keystore size: $(stat -c%s android/app/release.keystore) bytes"
+            echo "have_release_key=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure signing in build.gradle
+        env:
+          HAVE_KEY: ${{ steps.keystore.outputs.have_release_key }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD:      ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS:         ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ "$HAVE_KEY" = "true" ]; then
+            cat >> android/app/build.gradle << EOF
+
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file('release.keystore')
+                      storePassword "$KEYSTORE_PASSWORD"
+                      keyAlias "$KEY_ALIAS"
+                      keyPassword "$KEY_PASSWORD"
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+            echo "✅ build.gradle configured with RELEASE signing"
+          else
+            cat >> android/app/build.gradle << 'EOF'
 
           android {
               buildTypes {
@@ -83,6 +128,8 @@ jobs:
               }
           }
           EOF
+            echo "ℹ️  build.gradle configured with DEBUG signing (no SIGNING_KEY)"
+          fi
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -124,14 +171,12 @@ jobs:
             - Base version: ${{ steps.version.outputs.base }}
             - Build number: ${{ steps.version.outputs.build }}
             - Commit: ${{ steps.version.outputs.short_sha }}
+            - Signing: ${{ steps.keystore.outputs.have_release_key == 'true' && 'RELEASE (Play-ready)' || 'DEBUG (sideload only)' }}
 
             **For your phone (sideload):** download the `.apk`, uninstall any
             older version, then install.
 
             **For Google Play:** upload the `.aab` in the Play Console.
-
-            ⚠️ Both files are signed with the debug key for now. Before
-            publishing to Play, switch to a real release keystore.
           files: |
             dist/${{ steps.version.outputs.apk_name }}
             dist/${{ steps.version.outputs.aab_name }}
