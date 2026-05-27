@@ -50,6 +50,7 @@ jobs:
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "full=${FULL}"          >> "$GITHUB_OUTPUT"
           echo "apk_name=svara-yoga-v${FULL}.apk" >> "$GITHUB_OUTPUT"
+          echo "aab_name=svara-yoga-v${FULL}.aab" >> "$GITHUB_OUTPUT"
           echo "Building Svara Yoga v${FULL} (commit ${SHORT_SHA})"
 
       - name: Install dependencies
@@ -86,26 +87,30 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build Release APK
-        run: cd android && ./gradlew assembleRelease --no-daemon
+      - name: Build Release APK + AAB
+        run: cd android && ./gradlew assembleRelease bundleRelease --no-daemon
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
-      - name: Rename APK with version
+      - name: Collect APK & AAB with version names
         id: rename
         run: |
           mkdir -p dist
-          SRC=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
-          DST="dist/${{ steps.version.outputs.apk_name }}"
-          cp "$SRC" "$DST"
+          APK_SRC=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK_SRC" "dist/${{ steps.version.outputs.apk_name }}"
+          AAB_SRC=$(ls android/app/build/outputs/bundle/release/*.aab | head -1)
+          cp "$AAB_SRC" "dist/${{ steps.version.outputs.aab_name }}"
           ls -lh dist/
-          echo "apk_path=${DST}" >> "$GITHUB_OUTPUT"
+          echo "apk_path=dist/${{ steps.version.outputs.apk_name }}" >> "$GITHUB_OUTPUT"
+          echo "aab_path=dist/${{ steps.version.outputs.aab_name }}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload APK artifact
+      - name: Upload artifacts (APK + AAB)
         uses: actions/upload-artifact@v4
         with:
           name: svara-yoga-v${{ steps.version.outputs.full }}
-          path: dist/${{ steps.version.outputs.apk_name }}
+          path: |
+            dist/${{ steps.version.outputs.apk_name }}
+            dist/${{ steps.version.outputs.aab_name }}
           retention-days: 90
 
       - name: Create GitHub Release
@@ -120,8 +125,16 @@ jobs:
             - Build number: ${{ steps.version.outputs.build }}
             - Commit: ${{ steps.version.outputs.short_sha }}
 
-            Download the APK below, uninstall any older version, then install.
-          files: dist/${{ steps.version.outputs.apk_name }}
+            **For your phone (sideload):** download the `.apk`, uninstall any
+            older version, then install.
+
+            **For Google Play:** upload the `.aab` in the Play Console.
+
+            ⚠️ Both files are signed with the debug key for now. Before
+            publishing to Play, switch to a real release keystore.
+          files: |
+            dist/${{ steps.version.outputs.apk_name }}
+            dist/${{ steps.version.outputs.aab_name }}
           draft: false
           prerelease: false
         env:
