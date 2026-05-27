@@ -135,9 +135,7 @@ jobs:
         run: chmod +x android/gradlew
 
      - name: Build Release APK + AAB
-        run: |
-          cd android
-          ./gradlew assembleRelease bundleRelease --no-daemon -x lintVitalAnalyzeRelease -x lint
+        run: cd android && ./gradlew assembleRelease bundleRelease --no-daemon
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
