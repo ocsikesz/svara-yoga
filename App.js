@@ -32,7 +32,7 @@ const TABS = [
   { id:'home',     label:'Home',    img:require('./assets/home.png') },
   { id:'svara',    label:'Svara',   img:require('./assets/svara.png') },
   { id:'lunar',    label:'Lunar',   img:require('./assets/lunar.png') },
-  { id:'timeline', label:'Tattwa',  img:require('./assets/akasha.png') },
+  { id:'timeline', label:'Tattwa',  img:require('./assets/tattwa.png') },
   { id:'settings', label:'Settings',img:require('./assets/setting.png') },
 ];
 
