@@ -36,6 +36,21 @@ jobs:
           echo "$JAVA17/bin" >> "$GITHUB_PATH"
           echo "Selected JAVA_HOME=$JAVA17"
 
+      - name: Ensure Android SDK 35 is installed
+        run: |
+          SDKMGR=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
+          if [ -z "$SDKMGR" ]; then
+            SDKMGR=$(which sdkmanager || true)
+          fi
+          if [ -z "$SDKMGR" ]; then
+            echo "⚠️ sdkmanager not found — relying on pre-installed SDK"
+          else
+            echo "Using sdkmanager: $SDKMGR"
+            yes | "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null 2>&1 || true
+            echo "✅ Ensured platforms;android-35 and build-tools;35.0.0"
+          fi
+          echo "Installed platforms:"; ls "$ANDROID_HOME"/platforms 2>/dev/null || true
+
       - name: Compute version
         id: version
         run: |
@@ -60,6 +75,17 @@ jobs:
         run: npx expo prebuild --platform android --clean --no-install
         env:
           CI: 1
+
+      - name: Set versionCode and versionName
+        run: |
+          GRADLE=android/app/build.gradle
+          # versionCode = build number (commit count) → always increasing & unique
+          VCODE=${{ steps.version.outputs.build }}
+          VNAME="${{ steps.version.outputs.full }}"
+          sed -i -E "s/versionCode [0-9]+/versionCode ${VCODE}/" "$GRADLE"
+          sed -i -E "s/versionName \"[^\"]*\"/versionName \"${VNAME}\"/" "$GRADLE"
+          echo "Set versionCode=${VCODE}, versionName=${VNAME}"
+          grep -E "versionCode|versionName" "$GRADLE" | head -3
 
       - name: Bundle JavaScript into Android assets
         run: |

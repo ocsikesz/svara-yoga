@@ -34,7 +34,8 @@
         "USE_EXACT_ALARM",
         "WAKE_LOCK",
         "VIBRATE"
-      ]
+      ],
+      "versionCode": 1
     },
     "plugins": [
       [
@@ -43,7 +44,17 @@
           "locationAlwaysPermission": "Svara Yoga are nevoie de locație pentru acuratețea exercițiilor."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0"
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {
