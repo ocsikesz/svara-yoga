@@ -71,6 +71,24 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Patch expo-modules-core for SDK 35 Kotlin compile
+        run: |
+          # In Android SDK 35, PackageInfo.requestedPermissions became nullable
+          # (Array<String>?). Expo SDK 50's PermissionsService.kt accesses it
+          # directly (requestedPermissions.contains(...)), which fails to
+          # compile against compileSdk 35. Make that access null-safe.
+          F=node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/permissions/PermissionsService.kt
+          if [ -f "$F" ]; then
+            echo "Patching $F"
+            sed -n '162,170p' "$F"
+            sed -i 's/return requestedPermissions\.contains(permission)/return requestedPermissions?.contains(permission) ?: false/' "$F"
+            echo "--- after ---"
+            sed -n '162,170p' "$F"
+          else
+            echo "⚠️ PermissionsService.kt not found — searching..."
+            find node_modules/expo-modules-core -name "PermissionsService.kt" || true
+          fi
+
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean --no-install
         env:
