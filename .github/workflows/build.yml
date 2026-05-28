@@ -191,10 +191,24 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
+      - name: Verify patch was applied (debug)
+        run: |
+          F=node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/permissions/PermissionsService.kt
+          echo "=== PermissionsService.kt line 166 area ==="
+          sed -n '164,168p' "$F" 2>/dev/null || echo "file not found"
+          echo "=== Any remaining non-null requestedPermissions access? ==="
+          grep -rn "requestedPermissions" node_modules/expo-modules-core/android/src 2>/dev/null | grep -v "requestedPermissions?" || echo "none (all safe)"
+
       - name: Build Release APK + AAB
-        run: cd android && ./gradlew assembleRelease bundleRelease --no-daemon
+        run: cd android && ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/build.log
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
+
+      - name: Show Kotlin errors if build failed
+        if: failure()
+        run: |
+          echo "=== All Kotlin compile errors ==="
+          grep -E "\.kt:[0-9]+|error:|e: " /tmp/build.log | head -50 || echo "no kt errors captured"
 
       - name: Collect APK & AAB with version names
         id: rename
