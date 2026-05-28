@@ -76,6 +76,8 @@ jobs:
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           if [ -z "$SIGNING_KEY" ]; then
             echo "⚠️  No SIGNING_KEY secret set — using DEBUG signing (not Play-ready)"
@@ -94,26 +96,46 @@ jobs:
             fi
             SIZE=$(stat -c%s android/app/release.keystore)
             echo "Keystore size: $SIZE bytes"
-            # Verify the keystore actually opens with the given password
-            if keytool -list -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
-              echo "✅ Keystore opens correctly with KEYSTORE_PASSWORD"
-            else
-              echo "❌ Keystore could NOT be opened. Either:"
-              echo "   - the SIGNING_KEY base64 is incomplete/corrupted, or"
-              echo "   - KEYSTORE_PASSWORD does not match the one used at generation."
+            # 1) store password
+            if ! keytool -list -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
+              echo "❌ Keystore could NOT be opened with KEYSTORE_PASSWORD."
               exit 1
             fi
+            echo "✅ Keystore opens with KEYSTORE_PASSWORD"
+            # 2) test which password actually unlocks the KEY (this is what gradle needs)
+            #    Try KEY_PASSWORD first, then fall back to KEYSTORE_PASSWORD.
+            EFFECTIVE_KEYPASS=""
+            if keytool -keypasswd -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" -keypass "$KEY_PASSWORD" -new "$KEY_PASSWORD" >/dev/null 2>&1; then
+              EFFECTIVE_KEYPASS="key"
+              echo "✅ Key unlocks with KEY_PASSWORD"
+            elif keytool -keypasswd -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" -keypass "$KEYSTORE_PASSWORD" -new "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
+              EFFECTIVE_KEYPASS="store"
+              echo "⚠️  Key actually unlocks with KEYSTORE_PASSWORD (not KEY_PASSWORD)."
+              echo "    Will sign using the store password for the key."
+            else
+              echo "❌ Neither KEY_PASSWORD nor KEYSTORE_PASSWORD can unlock the key '$KEY_ALIAS'."
+              echo "    Check KEY_ALIAS and the passwords."
+              exit 1
+            fi
+            echo "effective_keypass=$EFFECTIVE_KEYPASS" >> "$GITHUB_OUTPUT"
             echo "have_release_key=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Configure signing in build.gradle
         env:
           HAVE_KEY: ${{ steps.keystore.outputs.have_release_key }}
+          EFFECTIVE: ${{ steps.keystore.outputs.effective_keypass }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD:      ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS:         ${{ secrets.KEY_ALIAS }}
         run: |
           if [ "$HAVE_KEY" = "true" ]; then
+            # Use whichever password actually unlocks the key
+            if [ "$EFFECTIVE" = "store" ]; then
+              USE_KEYPASS="$KEYSTORE_PASSWORD"
+            else
+              USE_KEYPASS="$KEY_PASSWORD"
+            fi
             cat >> android/app/build.gradle << EOF
 
           android {
@@ -122,7 +144,7 @@ jobs:
                       storeFile file('release.keystore')
                       storePassword "$KEYSTORE_PASSWORD"
                       keyAlias "$KEY_ALIAS"
-                      keyPassword "$KEY_PASSWORD"
+                      keyPassword "$USE_KEYPASS"
                   }
               }
               buildTypes {
@@ -132,7 +154,7 @@ jobs:
               }
           }
           EOF
-            echo "✅ build.gradle configured with RELEASE signing"
+            echo "✅ build.gradle configured with RELEASE signing (key password: $EFFECTIVE)"
           else
             cat >> android/app/build.gradle << 'EOF'
 
