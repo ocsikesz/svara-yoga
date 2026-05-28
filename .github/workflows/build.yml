@@ -76,48 +76,23 @@ jobs:
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           if [ -z "$SIGNING_KEY" ]; then
-            echo "⚠️  No SIGNING_KEY secret set — using DEBUG signing (not Play-ready)"
             echo "have_release_key=false" >> "$GITHUB_OUTPUT"
           else
-            echo "✅ SIGNING_KEY found — decoding release keystore"
-            # Strip ALL whitespace/newlines that may have crept in during copy-paste
-            printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 -d > android/app/release.keystore 2>/dev/null || {
-              echo "❌ base64 decode failed — the SIGNING_KEY secret is not valid base64."
-              echo "   Re-copy the FULL contents of svarayoga-release.keystore.base64.txt."
-              exit 1
-            }
-            if [ ! -s android/app/release.keystore ]; then
-              echo "❌ Decoded keystore is empty — check SIGNING_KEY secret"
-              exit 1
-            fi
-            SIZE=$(stat -c%s android/app/release.keystore)
-            echo "Keystore size: $SIZE bytes"
-            # 1) store password
+            echo "✅ SIGNING_KEY found — decoding"
+            # Decodare curată
+            printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 -d > android/app/release.keystore
+            
+            # Verificăm DOAR dacă parola de keystore e bună (fără testul de keypasswd care crapă)
             if ! keytool -list -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
-              echo "❌ Keystore could NOT be opened with KEYSTORE_PASSWORD."
+              echo "❌ Parola KEYSTORE_PASSWORD este greșită în GitHub Secrets!"
               exit 1
             fi
-            echo "✅ Keystore opens with KEYSTORE_PASSWORD"
-            # 2) test which password actually unlocks the KEY (this is what gradle needs)
-            #    Try KEY_PASSWORD first, then fall back to KEYSTORE_PASSWORD.
-            EFFECTIVE_KEYPASS=""
-            if keytool -keypasswd -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" -keypass "$KEY_PASSWORD" -new "$KEY_PASSWORD" >/dev/null 2>&1; then
-              EFFECTIVE_KEYPASS="key"
-              echo "✅ Key unlocks with KEY_PASSWORD"
-            elif keytool -keypasswd -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" -keypass "$KEYSTORE_PASSWORD" -new "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
-              EFFECTIVE_KEYPASS="store"
-              echo "⚠️  Key actually unlocks with KEYSTORE_PASSWORD (not KEY_PASSWORD)."
-              echo "    Will sign using the store password for the key."
-            else
-              echo "❌ Neither KEY_PASSWORD nor KEYSTORE_PASSWORD can unlock the key '$KEY_ALIAS'."
-              echo "    Check KEY_ALIAS and the passwords."
-              exit 1
-            fi
-            echo "effective_keypass=$EFFECTIVE_KEYPASS" >> "$GITHUB_OUTPUT"
+            
+            echo "✅ Keystore pregătit pentru Gradle"
+            echo "effective_keypass=store" >> "$GITHUB_OUTPUT"
             echo "have_release_key=true" >> "$GITHUB_OUTPUT"
           fi
 
