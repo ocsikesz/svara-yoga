@@ -75,18 +75,34 @@ jobs:
         id: keystore
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           if [ -z "$SIGNING_KEY" ]; then
             echo "⚠️  No SIGNING_KEY secret set — using DEBUG signing (not Play-ready)"
             echo "have_release_key=false" >> "$GITHUB_OUTPUT"
           else
             echo "✅ SIGNING_KEY found — decoding release keystore"
-            echo "$SIGNING_KEY" | base64 -d > android/app/release.keystore
+            # Strip ALL whitespace/newlines that may have crept in during copy-paste
+            printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 -d > android/app/release.keystore 2>/dev/null || {
+              echo "❌ base64 decode failed — the SIGNING_KEY secret is not valid base64."
+              echo "   Re-copy the FULL contents of svarayoga-release.keystore.base64.txt."
+              exit 1
+            }
             if [ ! -s android/app/release.keystore ]; then
               echo "❌ Decoded keystore is empty — check SIGNING_KEY secret"
               exit 1
             fi
-            echo "Keystore size: $(stat -c%s android/app/release.keystore) bytes"
+            SIZE=$(stat -c%s android/app/release.keystore)
+            echo "Keystore size: $SIZE bytes"
+            # Verify the keystore actually opens with the given password
+            if keytool -list -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
+              echo "✅ Keystore opens correctly with KEYSTORE_PASSWORD"
+            else
+              echo "❌ Keystore could NOT be opened. Either:"
+              echo "   - the SIGNING_KEY base64 is incomplete/corrupted, or"
+              echo "   - KEYSTORE_PASSWORD does not match the one used at generation."
+              exit 1
+            fi
             echo "have_release_key=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -134,7 +150,7 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-     - name: Build Release APK + AAB
+      - name: Build Release APK + AAB
         run: cd android && ./gradlew assembleRelease bundleRelease --no-daemon
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
