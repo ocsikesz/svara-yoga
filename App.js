@@ -540,7 +540,7 @@ function SvaraScreen({ picked, setPicked }) {
         )}
       </View>
       <View style={s.btnRow}>
-        {[{id:'ida',label:'Left (Ida)'},{id:'pingala',label:'Right (Pingala)'},{id:'sushumna',label:'Both equal'}].map(b=>(
+        {[{id:'ida',label:'Left (Ida)'},{id:'sushumna',label:'Both equal'},{id:'pingala',label:'Right (Pingala)'}].map(b=>(
           <TouchableOpacity key={b.id} style={[s.svaraBtn,picked===b.id&&s.svaraBtnActive]} onPress={()=>toggle(b.id)}>
             <Image source={NADI_IMG[b.id]} style={s.svaraBtnIconImg} resizeMode="contain"/>
             <Text style={[s.svaraBtnLabel,picked===b.id&&{color:C.gold}]}>{b.label}</Text>
@@ -673,10 +673,28 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
   const [ssH,     setSsH]     = useState(String(config.ssH).padStart(2,'0'));
   const [ssM,     setSsM]     = useState(String(config.ssM).padStart(2,'0'));
   const [useManualTime, setUseManualTime] = useState(config.sunriseMode === 'manual');
-  const [notifs,  setNotifs]  = useState(config.notifs || {nadi:true,tattva:true});
+  // Notifications: support per-nadi/per-tattva granularity.
+  // Legacy users have notifs.nadi/tattva as booleans → normalize to per-id maps.
+  const normalizeNotifs = (n) => ({
+    nadi:   typeof n?.nadi === 'object' && n.nadi !== null
+              ? { ida:!!n.nadi.ida, pingala:!!n.nadi.pingala, sushumna:!!n.nadi.sushumna }
+              : { ida:n?.nadi!==false, pingala:n?.nadi!==false, sushumna:n?.nadi!==false },
+    tattva: typeof n?.tattva === 'object' && n.tattva !== null
+              ? { akasha:!!n.tattva.akasha, vayu:!!n.tattva.vayu, tejas:!!n.tattva.tejas, apas:!!n.tattva.apas, prithvi:!!n.tattva.prithvi }
+              : { akasha:n?.tattva!==false, vayu:n?.tattva!==false, tejas:n?.tattva!==false, apas:n?.tattva!==false, prithvi:n?.tattva!==false },
+  });
+  const [notifs,  setNotifs]  = useState(() => normalizeNotifs(config.notifs));
+  const nadiAllOn   = notifs.nadi.ida && notifs.nadi.pingala && notifs.nadi.sushumna;
+  const tattvaAllOn = notifs.tattva.akasha && notifs.tattva.vayu && notifs.tattva.tejas && notifs.tattva.apas && notifs.tattva.prithvi;
+  const nadiAnyOn   = notifs.nadi.ida || notifs.nadi.pingala || notifs.nadi.sushumna;
+  const tattvaAnyOn = notifs.tattva.akasha || notifs.tattva.vayu || notifs.tattva.tejas || notifs.tattva.apas || notifs.tattva.prithvi;
+  const setNadiAll   = v => setNotifs(n => ({...n, nadi:   {ida:v, pingala:v, sushumna:v}}));
+  const setTattvaAll = v => setNotifs(n => ({...n, tattva: {akasha:v, vayu:v, tejas:v, apas:v, prithvi:v}}));
+  const toggleNadi   = id => setNotifs(n => ({...n, nadi:   {...n.nadi,   [id]:!n.nadi[id]}}));
+  const toggleTattva = id => setNotifs(n => ({...n, tattva: {...n.tattva, [id]:!n.tattva[id]}}));
   const [gpsLoad, setGpsLoad] = useState(false);
   const [saved,   setSaved]   = useState(false);
-  const toggleNotif = k => setNotifs(n=>({...n,[k]:!n[k]}));
+
   const ghSeq = isGhatika ? TATTVAS_GHATIKA : TATTVAS_CLASSIC;
 
   const fetchGPS = async () => {
@@ -879,22 +897,20 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
         </View>
 
         <Text style={s.sectionLabel}>⏱️  Tattva Duration System</Text>
-        <View style={s.settingCard}>
-          <View style={s.settingRow}>
+        <View style={[s.settingCard,{padding:12}]}>
+          <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
             <View style={{flex:1}}>
-              <Text style={s.settingTitle}>{isGhatika?'🕐 Ghatika System':'📜 Classic System'}</Text>
-              <Text style={s.settingSub}>{isGhatika?'Akasha→Vayu→Tejas→Apas→Prithvi · 24 min each':'Prithvi 20 · Apas 16 · Tejas 12 · Vayu 8 · Akasha 4 min'}</Text>
+              <Text style={{fontSize:14,color:C.goldLight,fontWeight:'500'}}>{isGhatika?'Ghatika':'Classic'} system</Text>
+              <Text style={{fontSize:11,color:C.faint,marginTop:1}}>{isGhatika?'Equal 24 min each':'Variable durations'}</Text>
             </View>
-            <Switch value={isGhatika} onValueChange={setIsGhatika} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={isGhatika?C.gold:'#6a4a8a'}/>
+            <Switch value={isGhatika} onValueChange={setIsGhatika} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={isGhatika?C.gold:'#6a4a8a'} style={{transform:[{scaleX:0.9},{scaleY:0.9}]}}/>
           </View>
-          <View style={{padding:12,borderTopWidth:0.5,borderColor:'#3a1a5a'}}>
+          <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingTop:8,borderTopWidth:0.5,borderTopColor:'#3a1a5a'}}>
             {ghSeq.map(t=>(
-              <View key={t.id} style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
-                  <Image source={TATTVA_IMG[t.id]} style={{width:22,height:22}} resizeMode="contain"/>
-                  <Text style={{fontSize:12,color:C.muted}}>{t.name}</Text>
-                </View>
-                <Text style={{fontSize:11,color:t.color}}>{isGhatika?t.ghatika:t.classic} min</Text>
+              <View key={t.id} style={{flex:1,alignItems:'center'}}>
+                <Image source={TATTVA_IMG[t.id]} style={{width:30,height:30,marginBottom:4}} resizeMode="contain"/>
+                <Text style={{fontSize:10,color:C.muted,marginBottom:1}}>{t.name}</Text>
+                <Text style={{fontSize:10,color:t.color,fontWeight:'500'}}>{isGhatika?t.ghatika:t.classic}m</Text>
               </View>
             ))}
           </View>
@@ -902,20 +918,67 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
 
         <Text style={s.sectionLabel}>🔔  Notifications</Text>
         <View style={s.settingCard}>
+          {/* ── Nadi master + per-nadi sub-switches ───────────────── */}
           <View style={s.settingRow}>
             <View style={{flex:1}}>
               <Text style={s.settingTitle}>🌬  Nadi Changes</Text>
-              <Text style={s.settingSub}>Alert when Ida, Pingala or Sushumna becomes active</Text>
+              <Text style={s.settingSub}>Alert when the active nadi changes</Text>
             </View>
-            <Switch value={notifs.nadi} onValueChange={()=>toggleNotif('nadi')} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={notifs.nadi?C.gold:'#6a4a8a'}/>
+            <Switch value={nadiAnyOn} onValueChange={v=>setNadiAll(v)} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={nadiAnyOn?C.gold:'#6a4a8a'}/>
           </View>
-          <View style={[s.settingRow,{borderBottomWidth:0}]}>
+          {nadiAnyOn && (
+            <View style={{paddingHorizontal:16,paddingBottom:10,paddingTop:2,gap:4}}>
+              {[
+                {id:'ida',      label:'Ida (Left, lunar)',     img:NADI_IMG.ida},
+                {id:'sushumna', label:'Sushumna (Both equal)', img:NADI_IMG.sushumna},
+                {id:'pingala',  label:'Pingala (Right, solar)',img:NADI_IMG.pingala},
+              ].map(it => (
+                <View key={it.id} style={{flexDirection:'row',alignItems:'center',paddingVertical:6}}>
+                  <Image source={it.img} style={{width:26,height:26,marginRight:10}} resizeMode="contain"/>
+                  <Text style={{flex:1,fontSize:13,color:C.muted}}>{it.label}</Text>
+                  <Switch
+                    value={notifs.nadi[it.id]}
+                    onValueChange={()=>toggleNadi(it.id)}
+                    trackColor={{false:'#3a1a5a',true:C.purple}}
+                    thumbColor={notifs.nadi[it.id]?C.gold:'#6a4a8a'}
+                    style={{transform:[{scaleX:0.85},{scaleY:0.85}]}}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* ── Tattva master + per-tattva sub-switches ───────────── */}
+          <View style={[s.settingRow,{borderBottomWidth:0,borderTopWidth:0.5,borderTopColor:'#3a1a5a'}]}>
             <View style={{flex:1}}>
               <Text style={s.settingTitle}>🪐  Tattva Changes</Text>
               <Text style={s.settingSub}>Alert when the active element shifts</Text>
             </View>
-            <Switch value={notifs.tattva} onValueChange={()=>toggleNotif('tattva')} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={notifs.tattva?C.gold:'#6a4a8a'}/>
+            <Switch value={tattvaAnyOn} onValueChange={v=>setTattvaAll(v)} trackColor={{false:'#3a1a5a',true:C.purple}} thumbColor={tattvaAnyOn?C.gold:'#6a4a8a'}/>
           </View>
+          {tattvaAnyOn && (
+            <View style={{paddingHorizontal:16,paddingBottom:10,paddingTop:2,gap:4}}>
+              {[
+                {id:'prithvi', label:'Prithvi (Earth)'},
+                {id:'apas',    label:'Apas (Water)'},
+                {id:'tejas',   label:'Tejas (Fire)'},
+                {id:'vayu',    label:'Vayu (Air)'},
+                {id:'akasha',  label:'Akasha (Ether)'},
+              ].map(it => (
+                <View key={it.id} style={{flexDirection:'row',alignItems:'center',paddingVertical:6}}>
+                  <Image source={TATTVA_IMG[it.id]} style={{width:26,height:26,marginRight:10}} resizeMode="contain"/>
+                  <Text style={{flex:1,fontSize:13,color:C.muted}}>{it.label}</Text>
+                  <Switch
+                    value={notifs.tattva[it.id]}
+                    onValueChange={()=>toggleTattva(it.id)}
+                    trackColor={{false:'#3a1a5a',true:C.purple}}
+                    thumbColor={notifs.tattva[it.id]?C.gold:'#6a4a8a'}
+                    style={{transform:[{scaleX:0.85},{scaleY:0.85}]}}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         <TouchableOpacity style={s.saveBtn} onPress={handleApply}>
@@ -985,7 +1048,10 @@ function InnerApp() {
       sunriseMin:calc.sunriseMin, sunsetMin:calc.sunsetMin,
       sunriseStr:calc.sunriseStr, sunsetStr:calc.sunsetStr,
       locationMode:'default', sunriseMode:'auto',
-      notifs:{ nadi:true, tattva:true },
+      notifs:{
+        nadi:   { ida:true, pingala:true, sushumna:true },
+        tattva: { akasha:true, vayu:true, tejas:true, apas:true, prithvi:true },
+      },
     };
   });
 
@@ -1162,19 +1228,17 @@ function InnerApp() {
         let lastTat = tattvaAt(0).id;
         let lastNadi = nadiAt(0);
         for (let dm = 1; dm <= 1440; dm++) {
-          if (config.notifs?.tattva) {
-            const t = tattvaAt(dm).id;
-            if (t !== lastTat) {
-              if (dm >= 5) txs.push({ dm, type:'tattva', toId: t });
-              lastTat = t;
-            }
+          // Tattva transitions — only push if this specific tattva is enabled
+          const t = tattvaAt(dm).id;
+          if (t !== lastTat) {
+            if (dm >= 5 && config.notifs?.tattva?.[t]) txs.push({ dm, type:'tattva', toId: t });
+            lastTat = t;
           }
-          if (config.notifs?.nadi) {
-            const n = nadiAt(dm);
-            if (n !== lastNadi) {
-              if (dm >= 5) txs.push({ dm, type:'nadi', toId: n });
-              lastNadi = n;
-            }
+          // Nadi transitions — only push if this specific nadi is enabled
+          const n = nadiAt(dm);
+          if (n !== lastNadi) {
+            if (dm >= 5 && config.notifs?.nadi?.[n]) txs.push({ dm, type:'nadi', toId: n });
+            lastNadi = n;
           }
         }
 
@@ -1232,7 +1296,7 @@ function InnerApp() {
     // as old notifications fire and the 24h window slides forward.
     const intervalId = setInterval(scheduleAll, 10*60*1000);
     return () => { clearTimeout(debouncedId); clearInterval(intervalId); };
-  }, [config.sunriseMin, isGhatika, config.notifs?.nadi, config.notifs?.tattva]);
+  }, [config.sunriseMin, isGhatika, JSON.stringify(config.notifs)]);
 
   const screens = {
     home:     <HomeScreen config={config} isGhatika={isGhatika} manualSvara={manualSvara}/>,
