@@ -1242,9 +1242,10 @@ function InnerApp() {
           }
         }
 
-        // Sort and limit (Android caps at ~50 scheduled notifications per app)
+        // Sort and limit (Android caps at ~500 scheduled per app, we use 50 for
+        // robust overnight coverage + the listener below refills on each delivery).
         txs.sort((a,b) => a.dm - b.dm);
-        const limited = txs.slice(0, 45);
+        const limited = txs.slice(0, 50);
 
         // Schedule each transition with appropriate trigger
         for (const tx of limited) {
@@ -1295,7 +1296,18 @@ function InnerApp() {
     // Also re-schedule every 10 min while app is open to keep the pipeline fresh
     // as old notifications fire and the 24h window slides forward.
     const intervalId = setInterval(scheduleAll, 10*60*1000);
-    return () => { clearTimeout(debouncedId); clearInterval(intervalId); };
+    // LOOP REFILL: each time a svara-tx notification is received (or wakes the
+    // app briefly), top up the queue so the buffer never empties. Combined with
+    // the 50-item buffer, this gives strong overnight coverage even when the
+    // app is closed for long stretches.
+    const sub = Notifications.addNotificationReceivedListener((notif) => {
+      try {
+        if (notif?.request?.content?.data?.kind === 'svara-tx') {
+          scheduleAll();
+        }
+      } catch(e) {}
+    });
+    return () => { clearTimeout(debouncedId); clearInterval(intervalId); sub.remove(); };
   }, [config.sunriseMin, isGhatika, JSON.stringify(config.notifs)]);
 
   const screens = {
