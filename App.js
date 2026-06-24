@@ -364,7 +364,7 @@ function AppHeader({ subtitle }) {
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
-function HomeScreen({ config, isGhatika, manualSvara }) {
+function HomeScreen({ config, isGhatika, manualSvara, hasFullAccess }) {
   const { sunriseMin, sunriseStr, sunsetStr, locationMode, sunriseMode } = config;
   const lunar = getLunarDay();
   const [autoSvara,    setAutoSvara]    = useState(() => getSvaraFromSunrise(sunriseMin, lunar.day, lunar.paksha));
@@ -401,6 +401,33 @@ function HomeScreen({ config, isGhatika, manualSvara }) {
   };
   const sm = SVARA_META[svara];
   const srcLabel = locationMode==='gps' ? '📡 GPS' : locationMode==='manual' ? '✏️ Manual' : '⚙️ Default';
+
+  // ── FREE HOME VIEW ─────────────────────────────────────────────────────────
+  // After trial ends (and before purchase), show only the absolute minimum:
+  // current nadi name + current tattva name. No timeline, no countdown, no
+  // descriptions, no shloka. This is the "free tier" home screen.
+  if (!hasFullAccess) {
+    return (
+      <ScrollView style={{flex:1,backgroundColor:C.bg}} contentContainerStyle={{flexGrow:1,justifyContent:'center'}}>
+        <AppHeader subtitle="Free version"/>
+        <View style={s.freeHomeCenter}>
+          <View style={s.freeCard}>
+            <Text style={s.freeLabel}>Active Svara</Text>
+            <Image source={NADI_IMG[svara]} style={s.svaraIconImg} resizeMode="contain"/>
+            <Text style={s.freeName}>{sm.name}</Text>
+          </View>
+          <View style={s.freeCard}>
+            <Text style={s.freeLabel}>Active Tattva</Text>
+            <Image source={TATTVA_IMG[activeTattva.id]} style={s.svaraIconImg} resizeMode="contain"/>
+            <Text style={s.freeName}>{activeTattva.name}</Text>
+          </View>
+          <Text style={s.freeHint}>
+            Unlock the full experience to see the Tattva Timeline, Lunar Guide, descriptions, sunrise & sunset times, and reliable notifications.
+          </Text>
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
@@ -1355,7 +1382,7 @@ function InnerApp() {
   }, [config.sunriseMin, isGhatika, JSON.stringify(config.notifs)]);
 
   const screens = {
-    home:     <HomeScreen config={config} isGhatika={isGhatika} manualSvara={manualSvara}/>,
+    home:     <HomeScreen config={config} isGhatika={isGhatika} manualSvara={manualSvara} hasFullAccess={hasFullAccess}/>,
     svara:    <SvaraScreen picked={manualSvara} setPicked={setManualSvara}/>,
     lunar:    <LunarScreen/>,
     timeline: <TimelineScreen config={config} isGhatika={isGhatika}/>,
@@ -1497,6 +1524,11 @@ const s = StyleSheet.create({
   saveBtn:      { alignItems:'center', justifyContent:'center', backgroundColor:C.purple, borderWidth:0.5, borderColor:C.gold, borderRadius:14, padding:16 },
   trialBanner:  { backgroundColor:'#2a1040', paddingVertical:8, paddingHorizontal:14, borderBottomWidth:0.5, borderColor:C.gold },
   trialText:    { fontSize:12, color:C.goldLight, textAlign:'center', letterSpacing:0.4 },
+  freeHomeCenter:{ paddingVertical:24, paddingHorizontal:16, alignItems:'center', gap:14 },
+  freeCard:     { width:'100%', backgroundColor:C.bgCard, borderRadius:16, borderWidth:1, borderColor:C.border, paddingVertical:24, paddingHorizontal:16, alignItems:'center' },
+  freeLabel:    { fontSize:11, color:C.muted, textTransform:'uppercase', letterSpacing:1.2, marginBottom:10 },
+  freeName:     { fontSize:24, fontWeight:'500', color:C.goldLight, letterSpacing:0.5, marginTop:6 },
+  freeHint:     { fontSize:12, color:C.muted, textAlign:'center', lineHeight:18, paddingHorizontal:14, marginTop:6, fontStyle:'italic' },
   bottomNav:    { flexDirection:'row', backgroundColor:C.bg, borderTopWidth:0.5, borderColor:C.borderFaint, paddingTop:10 },
   navItem:      { flex:1, alignItems:'center', gap:4 },
   navIcon:      { fontSize:26 },
