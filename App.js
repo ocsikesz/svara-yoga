@@ -5,6 +5,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import SunCalc from 'suncalc';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
+import * as RNIap from 'react-native-iap';
+
+// IAP product ID — must match the SKU created in Google Play Console.
+// Single non-consumable product (one-time premium unlock, no subscription).
+const PREMIUM_SKU = 'svara_premium';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -689,7 +694,7 @@ function TimelineScreen({ config, isGhatika }) {
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
-function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
+function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika, isPremium, iapPrice, iapBusy, requestPremium, restorePremium }) {
   // Mode = 'auto' (GPS on every app open) | 'gps-once' (GPS now, fixed) | 'manual' (typed)
   const [mode,    setMode]    = useState(config.locationMode === 'auto' ? 'auto' : config.locationMode === 'gps' ? 'gps-once' : 'manual');
   const [city,    setCity]    = useState(config.city);
@@ -815,6 +820,34 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika }) {
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
       <AppHeader subtitle="Settings"/>
       <View style={{padding:14,gap:14}}>
+
+        {/* ── PREMIUM ─────────────────────────────────────────────────────── */}
+        <Text style={s.sectionLabel}>✨  Premium</Text>
+        <View style={s.settingCard}>
+          {isPremium ? (
+            <View style={{padding:14,alignItems:'center',gap:8}}>
+              <Text style={{fontSize:28}}>🙏</Text>
+              <Text style={{color:C.gold,fontSize:16,fontWeight:'500'}}>Premium unlocked</Text>
+              <Text style={{color:C.muted,fontSize:12,textAlign:'center'}}>Thank you for supporting Svara Yoga.</Text>
+            </View>
+          ) : (
+            <View style={{padding:14,gap:10}}>
+              <Text style={{color:C.goldLight,fontSize:14,lineHeight:20}}>
+                Unlock the full experience: Tattva Timeline, Lunar Guide, sunrise & sunset, descriptions, and reliable notifications. One-time purchase, yours forever.
+              </Text>
+              <TouchableOpacity onPress={requestPremium} disabled={iapBusy} activeOpacity={0.75}
+                style={{backgroundColor:C.gold,borderRadius:10,paddingVertical:12,alignItems:'center',marginTop:4,opacity:iapBusy?0.6:1}}>
+                <Text style={{color:'#1a0a2e',fontSize:15,fontWeight:'500'}}>
+                  {iapBusy ? 'Opening Google Play…' : (iapPrice ? `Unlock — ${iapPrice}` : 'Unlock Premium')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => restorePremium(true)} disabled={iapBusy} activeOpacity={0.6}
+                style={{paddingVertical:8,alignItems:'center'}}>
+                <Text style={{color:C.muted,fontSize:12,textDecorationLine:'underline'}}>Restore previous purchase</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
         <Text style={s.sectionLabel}>📍  Location</Text>
         <View style={s.settingCard}>
@@ -1105,6 +1138,120 @@ function InnerApp() {
     return { daysSince, daysLeft, inTrial: daysLeft > 0 };
   })();
   const hasFullAccess = isPremium || trialInfo.inTrial;
+
+  // ── IAP (PURCHASES) ─────────────────────────────────────────────────────────
+  // One-time purchase product 'svara_premium' from Google Play. The flow:
+  //   1. On mount, initConnection() opens the Billing connection.
+  //   2. Verify any past purchase (getAvailablePurchases) so reinstalls and
+  //      app-data clears still restore premium without manual action.
+  //   3. Subscribe to purchaseUpdatedListener — fires on successful buy.
+  //      We finishTransaction(isConsumable:false) to ACK to Google (otherwise
+  //      Google auto-refunds within 3 days), then save 'svaraPremium' = true.
+  //   4. Subscribe to purchaseErrorListener for failures (USER_CANCELED is
+  //      silent; everything else gets a friendly Alert).
+  //   5. fetchProduct() loads the localized price string so we can show it on
+  //      the unlock UI (best-effort — purchase still works if it fails).
+  //   6. On unmount, endConnection() cleans up.
+  // requestPremium() is what we wire to the "Unlock" tap from the banner.
+  // restorePremium() is exposed for the Settings screen and called silently
+  // on mount.
+  const [iapPrice, setIapPrice] = useState(null);     // e.g. "4.99 €" — null if not loaded
+  const [iapBusy,  setIapBusy]  = useState(false);    // true while a request is in flight
+  const iapReadyRef = useRef(false);
+
+  const restorePremium = async (showAlert) => {
+    try {
+      const purchases = await RNIap.getAvailablePurchases();
+      const owned = purchases.some(p => p.productId === PREMIUM_SKU);
+      if (owned) {
+        await AsyncStorage.setItem('svaraPremium', 'true');
+        setIsPremium(true);
+        if (showAlert) Alert.alert('Restored', 'Your premium access is now active.');
+        return true;
+      }
+      if (showAlert) Alert.alert('No purchases found', 'There is no previous Svara Yoga premium purchase on this Google account.');
+      return false;
+    } catch (e) {
+      if (showAlert) Alert.alert('Restore failed', e?.message || 'Please try again later.');
+      return false;
+    }
+  };
+
+  const requestPremium = async () => {
+    if (iapBusy) return;
+    if (!iapReadyRef.current) {
+      Alert.alert('Store not ready', 'The Google Play store is not available right now. Please try again in a moment.');
+      return;
+    }
+    setIapBusy(true);
+    try {
+      await RNIap.requestPurchase({ skus: [PREMIUM_SKU] });
+      // The actual unlock happens in purchaseUpdatedListener below.
+    } catch (e) {
+      const code = e?.code || '';
+      if (code === 'E_USER_CANCELLED' || code === 'E_USER_CANCELED') {
+        // silent
+      } else if (code === 'E_ALREADY_OWNED') {
+        // The user already owns it — treat as a restore.
+        await restorePremium(true);
+      } else {
+        Alert.alert('Purchase failed', e?.message || 'Please try again later.');
+      }
+    } finally {
+      setIapBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    let purchaseUpdateSub = null;
+    let purchaseErrorSub = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        await RNIap.initConnection();
+        if (cancelled) return;
+        iapReadyRef.current = true;
+        // Best-effort: fetch the product to get the localized price string.
+        try {
+          const products = await RNIap.getProducts({ skus: [PREMIUM_SKU] });
+          const p = products && products[0];
+          if (p && p.localizedPrice) setIapPrice(p.localizedPrice);
+        } catch (e) {}
+        // Silent restore so users who reinstall or clear data don't have to
+        // press a button to get their premium back.
+        await restorePremium(false);
+        // Listen for future purchases.
+        purchaseUpdateSub = RNIap.purchaseUpdatedListener(async (purchase) => {
+          try {
+            if (purchase?.productId !== PREMIUM_SKU) return;
+            // Android: purchaseStateAndroid 1 = purchased, 2 = pending, 0 = unspecified.
+            // Acknowledge regardless; finishTransaction is idempotent.
+            await RNIap.finishTransaction({ purchase, isConsumable: false });
+            await AsyncStorage.setItem('svaraPremium', 'true');
+            setIsPremium(true);
+            Alert.alert('Thank you 🙏', 'Premium is now unlocked. Enjoy the full Svara Yoga experience.');
+          } catch (e) {}
+        });
+        purchaseErrorSub = RNIap.purchaseErrorListener((err) => {
+          // Errors from requestPurchase() are also caught above in requestPremium's
+          // try/catch — this listener catches errors that bubble up out-of-band.
+          if (err?.code === 'E_USER_CANCELLED' || err?.code === 'E_USER_CANCELED') return;
+        });
+      } catch (e) {
+        // Billing unavailable in this environment (dev build, sideloaded APK,
+        // missing Play services, etc.). Premium stays locked but the rest of
+        // the app works.
+        iapReadyRef.current = false;
+      }
+    })();
+    return () => {
+      cancelled = true;
+      try { purchaseUpdateSub?.remove(); } catch (e) {}
+      try { purchaseErrorSub?.remove(); } catch (e) {}
+      try { RNIap.endConnection(); } catch (e) {}
+    };
+  }, []);
+
   const [config, setConfig] = useState(() => {
     const calc = calcSunrise(DEFAULT_LAT, DEFAULT_LNG);
     return {
@@ -1386,23 +1533,31 @@ function InnerApp() {
     svara:    <SvaraScreen picked={manualSvara} setPicked={setManualSvara}/>,
     lunar:    <LunarScreen/>,
     timeline: <TimelineScreen config={config} isGhatika={isGhatika}/>,
-    settings: <SettingsScreen config={config} setConfig={setConfig} isGhatika={isGhatika} setIsGhatika={setIsGhatika}/>,
+    settings: <SettingsScreen config={config} setConfig={setConfig} isGhatika={isGhatika} setIsGhatika={setIsGhatika}
+                              isPremium={isPremium} iapPrice={iapPrice} iapBusy={iapBusy}
+                              requestPremium={requestPremium} restorePremium={restorePremium}/>,
   };
 
   return (
     <View style={{flex:1,backgroundColor:C.bg,paddingTop:insets.top}}>
       {/* Trial banner — visible only when not premium. During trial shows the
-          remaining days; after trial it gently nudges towards unlock. The
-          banner stays visible until premium is purchased. Wired to actual
-          unlock action in a later commit (IAP integration). */}
+          remaining days; after trial it's tappable and triggers the IAP flow.
+          Wraps in TouchableOpacity so the whole banner is the unlock affordance. */}
       {!isPremium && (
-        <View style={s.trialBanner}>
+        <TouchableOpacity
+          onPress={requestPremium}
+          disabled={iapBusy}
+          activeOpacity={0.75}
+          style={s.trialBanner}
+        >
           <Text style={s.trialText}>
-            {trialInfo.inTrial
-              ? `✨ Free trial · ${trialInfo.daysLeft} day${trialInfo.daysLeft === 1 ? '' : 's'} remaining`
-              : '🔒 Trial ended — unlock the full experience'}
+            {iapBusy
+              ? '⏳ Opening Google Play…'
+              : trialInfo.inTrial
+                ? `✨ Free trial · ${trialInfo.daysLeft} day${trialInfo.daysLeft === 1 ? '' : 's'} left  ·  Tap to unlock${iapPrice ? '  ('+iapPrice+')' : ''}`
+                : `🔒 Trial ended  ·  Tap to unlock${iapPrice ? '  ('+iapPrice+')' : ''}`}
           </Text>
-        </View>
+        </TouchableOpacity>
       )}
       <View style={{flex:1}}>{screens[activeTab]}</View>
       <View style={[s.bottomNav,{paddingBottom:insets.bottom+8}]}>
