@@ -36,7 +36,7 @@
         "VIBRATE",
         "com.android.vending.BILLING"
       ],
-      "versionCode": 1
+      "versionCode": 105
     },
     "plugins": [
       [
@@ -53,7 +53,8 @@
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
             "buildToolsVersion": "35.0.0",
-            "kotlinVersion": "1.9.24"
+            "kotlinVersion": "1.9.24",
+            "uncompressedNativeLibsEnabled": false
           }
         }
       ],
