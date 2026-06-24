@@ -1,6 +1,9 @@
 name: Build Android APK
 on:
-  workflow_dispatch:      # Manual only — click "Run workflow" in the Actions tab.
+  workflow_dispatch:      # Manual on any branch — click "Run workflow" in the Actions tab.
+  push:
+    branches:
+      - expo-51-upgrade   # Auto-build on the SDK upgrade branch for fast iteration.
 
 permissions:
   contents: write
@@ -71,22 +74,19 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Patch expo-modules-core for SDK 35 Kotlin compile
+      - name: Patch expo-modules-core for SDK 35 Kotlin compile (SDK 50 only)
         run: |
-          # In Android SDK 35, PackageInfo.requestedPermissions became nullable
-          # (Array<String>?). Expo SDK 50's PermissionsService.kt accesses it
-          # directly (requestedPermissions.contains(...)), which fails to
-          # compile against compileSdk 35. Make that access null-safe.
+          # NOTE: This patch is only needed on Expo SDK 50, where PermissionsService.kt
+          # accesses PackageInfo.requestedPermissions directly (it became nullable in
+          # Android SDK 35). Expo SDK 51+ has this fixed upstream.
+          # The patch is guarded so it's a no-op on SDK 51+ (the line won't match).
           F=node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/permissions/PermissionsService.kt
-          if [ -f "$F" ]; then
-            echo "Patching $F"
-            sed -n '162,170p' "$F"
+          if [ -f "$F" ] && grep -q "return requestedPermissions\.contains(permission)" "$F"; then
+            echo "SDK 50 detected — applying patch"
             sed -i 's/return requestedPermissions\.contains(permission)/return requestedPermissions?.contains(permission) ?: false/' "$F"
-            echo "--- after ---"
-            sed -n '162,170p' "$F"
+            echo "✅ Patched"
           else
-            echo "⚠️ PermissionsService.kt not found — searching..."
-            find node_modules/expo-modules-core -name "PermissionsService.kt" || true
+            echo "✅ No patch needed (SDK 51+ or file structure changed)"
           fi
 
       - name: Prebuild Android
