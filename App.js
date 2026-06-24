@@ -1040,6 +1040,44 @@ function InnerApp() {
   const [isGhatika, setIsGhatika] = useState(true);
   const [manualSvara, setManualSvara] = useState(null);
   const insets = useSafeAreaInsets();
+
+  // ── TRIAL & PREMIUM STATE ───────────────────────────────────────────────────
+  // Stores the first time the user opened THIS version of the app (so existing
+  // production users who update get a fresh 10-day trial from update time).
+  // After trial, features will be gated on `isPremium` (set by IAP — wired in
+  // a later commit). For now isPremium stays false; banner shows remaining days.
+  const TRIAL_DAYS = 10;
+  const [firstRunAt, setFirstRunAt] = useState(null);
+  const [isPremium, setIsPremium] = useState(false);
+  const [tick, setTick] = useState(0); // forces re-render once a day for the counter
+
+  useEffect(() => {
+    (async () => {
+      try {
+        let stored = await AsyncStorage.getItem('svaraFirstRun');
+        if (!stored) {
+          stored = String(Date.now());
+          await AsyncStorage.setItem('svaraFirstRun', stored);
+        }
+        setFirstRunAt(parseInt(stored, 10));
+        const prem = await AsyncStorage.getItem('svaraPremium');
+        setIsPremium(prem === 'true');
+      } catch(e) {}
+    })();
+    // Re-render once an hour so the days-remaining counter updates cleanly
+    // (the trial cutoff itself is computed on demand, this is just for the UI).
+    const id = setInterval(() => setTick(t => t + 1), 60 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const trialInfo = (() => {
+    if (firstRunAt == null) return { daysSince: 0, daysLeft: TRIAL_DAYS, inTrial: true };
+    const ms = Date.now() - firstRunAt;
+    const daysSince = Math.floor(ms / (1000 * 60 * 60 * 24));
+    const daysLeft = Math.max(0, TRIAL_DAYS - daysSince);
+    return { daysSince, daysLeft, inTrial: daysLeft > 0 };
+  })();
+  const hasFullAccess = isPremium || trialInfo.inTrial;
   const [config, setConfig] = useState(() => {
     const calc = calcSunrise(DEFAULT_LAT, DEFAULT_LNG);
     return {
@@ -1224,10 +1262,13 @@ function InnerApp() {
         // Walk minute-by-minute, detect when value changes from previous.
         // Skip the first 5 minutes — anything that close may have just fired
         // or be in the queue; re-scheduling creates duplicate "ghost" notifications.
+        // Horizon extended to 7 days (10080 min) so we can pre-fill up to 500
+        // notifications and survive long stretches without app being opened.
+        const HORIZON_MIN = 7 * 24 * 60; // 10080
         const txs = []; // {dm, type:'tattva'|'nadi', toId}
         let lastTat = tattvaAt(0).id;
         let lastNadi = nadiAt(0);
-        for (let dm = 1; dm <= 1440; dm++) {
+        for (let dm = 1; dm <= HORIZON_MIN; dm++) {
           // Tattva transitions — only push if this specific tattva is enabled
           const t = tattvaAt(dm).id;
           if (t !== lastTat) {
@@ -1242,10 +1283,13 @@ function InnerApp() {
           }
         }
 
-        // Sort and limit (Android caps at ~500 scheduled per app, we use 50 for
-        // robust overnight coverage + the listener below refills on each delivery).
+        // Sort and limit. Android can handle ~500 scheduled notifications per
+        // app — we use that as our cap. With ~3.5 events/hour in Ghatika mode
+        // (nadi transitions + tattva transitions), 500 covers ~6 days. The
+        // listener below refills on each delivery, so the queue stays full
+        // even longer in practice.
         txs.sort((a,b) => a.dm - b.dm);
-        const limited = txs.slice(0, 50);
+        const limited = txs.slice(0, 500);
 
         // Schedule each transition with appropriate trigger
         for (const tx of limited) {
@@ -1320,6 +1364,19 @@ function InnerApp() {
 
   return (
     <View style={{flex:1,backgroundColor:C.bg,paddingTop:insets.top}}>
+      {/* Trial banner — visible only when not premium. During trial shows the
+          remaining days; after trial it gently nudges towards unlock. The
+          banner stays visible until premium is purchased. Wired to actual
+          unlock action in a later commit (IAP integration). */}
+      {!isPremium && (
+        <View style={s.trialBanner}>
+          <Text style={s.trialText}>
+            {trialInfo.inTrial
+              ? `✨ Free trial · ${trialInfo.daysLeft} day${trialInfo.daysLeft === 1 ? '' : 's'} remaining`
+              : '🔒 Trial ended — unlock the full experience'}
+          </Text>
+        </View>
+      )}
       <View style={{flex:1}}>{screens[activeTab]}</View>
       <View style={[s.bottomNav,{paddingBottom:insets.bottom+8}]}>
         {TABS.map(t=>(
@@ -1438,6 +1495,8 @@ const s = StyleSheet.create({
   settingTitle: { fontSize:15, color:C.goldLight },
   settingSub:   { fontSize:12, color:C.muted, marginTop:3 },
   saveBtn:      { alignItems:'center', justifyContent:'center', backgroundColor:C.purple, borderWidth:0.5, borderColor:C.gold, borderRadius:14, padding:16 },
+  trialBanner:  { backgroundColor:'#2a1040', paddingVertical:8, paddingHorizontal:14, borderBottomWidth:0.5, borderColor:C.gold },
+  trialText:    { fontSize:12, color:C.goldLight, textAlign:'center', letterSpacing:0.4 },
   bottomNav:    { flexDirection:'row', backgroundColor:C.bg, borderTopWidth:0.5, borderColor:C.borderFaint, paddingTop:10 },
   navItem:      { flex:1, alignItems:'center', gap:4 },
   navIcon:      { fontSize:26 },

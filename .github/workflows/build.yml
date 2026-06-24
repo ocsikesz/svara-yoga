@@ -1,9 +1,6 @@
 name: Build Android APK
 on:
-  workflow_dispatch:      # Manual on any branch — click "Run workflow" in the Actions tab.
-  push:
-    branches:
-      - expo-51-upgrade   # Auto-build on the SDK upgrade branch for fast iteration.
+  workflow_dispatch:      # Manual only — click "Run workflow" in the Actions tab.
 
 permissions:
   contents: write
