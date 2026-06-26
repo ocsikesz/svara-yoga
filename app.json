@@ -2,7 +2,7 @@
   "expo": {
     "name": "Svara Yoga",
     "slug": "svara-yoga",
-    "version": "1.2",
+    "version": "2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -36,7 +36,7 @@
         "VIBRATE",
         "com.android.vending.BILLING"
       ],
-      "versionCode": 105
+      "versionCode": 106
     },
     "plugins": [
       [
