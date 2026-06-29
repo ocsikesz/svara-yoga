@@ -1101,6 +1101,16 @@ function InnerApp() {
   const [manualSvara, setManualSvara] = useState(null);
   const insets = useSafeAreaInsets();
 
+  // ── NOTIFICATION READINESS ──────────────────────────────────────────────────
+  // Becomes true only after we've successfully:
+  //  (1) requested + been granted POST_NOTIFICATIONS permission, and
+  //  (2) created the Android notification channel.
+  // Scheduling is gated on this — prevents race conditions on Android 13+ where
+  // creating the channel before permission was granted could crash the app or
+  // leave it in an inconsistent state (which is why first-install users were
+  // seeing the app close when accepting the permission dialog).
+  const [notifReady, setNotifReady] = useState(false);
+
   // ── TRIAL & PREMIUM STATE ───────────────────────────────────────────────────
   // Stores the first time the user opened THIS version of the app (so existing
   // production users who update get a fresh 10-day trial from update time).
@@ -1339,11 +1349,35 @@ function InnerApp() {
     })();
   }, [isGhatika]);
 
-  // Request notification permissions + create Android notification channel
+  // Request notification permissions + create Android notification channel.
+  // ORDER MATTERS on Android 13+ (target API 35):
+  //   1. Request POST_NOTIFICATIONS permission and AWAIT the user's response.
+  //   2. Only if granted, create the channel.
+  //   3. Only after both are done, mark notifReady = true so scheduling can run.
+  // This prevents the "app closes when accepting the notification dialog" bug
+  // caused by creating the channel and trying to schedule notifications in
+  // parallel with an unresolved permission request.
   useEffect(() => {
     (async () => {
       try {
-        // Android 8+ requires a notification channel to display notifications
+        // (1) Ask for permission first. On Android 13+ this is required;
+        // on older Androids it just returns 'granted' without showing UI.
+        const { status: existing, canAskAgain } = await Notifications.getPermissionsAsync();
+        let final = existing;
+        if (existing !== 'granted' && canAskAgain) {
+          const req = await Notifications.requestPermissionsAsync({
+            android: {},
+            ios: { allowAlert:true, allowSound:true, allowBadge:false },
+          });
+          final = req.status;
+        }
+        if (final !== 'granted') {
+          // User denied — leave notifReady false; app still works without
+          // notifications. They can re-enable in OS settings later.
+          return;
+        }
+
+        // (2) Permission granted — now create the Android channel.
         if (Platform.OS === 'android') {
           await Notifications.setNotificationChannelAsync('svara-transitions', {
             name: 'Svara Transitions',
@@ -1358,14 +1392,12 @@ function InnerApp() {
           });
         }
 
-        const { status, canAskAgain } = await Notifications.getPermissionsAsync();
-        if (status !== 'granted' && canAskAgain) {
-          await Notifications.requestPermissionsAsync({
-            android: {},
-            ios: { allowAlert:true, allowSound:true, allowBadge:false },
-          });
-        }
-      } catch(e) {}
+        // (3) Mark ready. The scheduling useEffect will pick this up via
+        // its dependency and start scheduling.
+        setNotifReady(true);
+      } catch(e) {
+        // Permission API failed; leave notifReady false. App keeps working.
+      }
     })();
   }, []);
 
@@ -1392,6 +1424,10 @@ function InnerApp() {
     };
 
     const scheduleAll = async () => {
+      // Guard: never touch the notification system until the permission +
+      // channel are both confirmed ready. Prevents races during first-install
+      // permission prompt on Android 13+.
+      if (!notifReady) return;
       try {
         // Clear any previously scheduled svara notifications
         const all = await Notifications.getAllScheduledNotificationsAsync();
@@ -1526,7 +1562,7 @@ function InnerApp() {
       } catch(e) {}
     });
     return () => { clearTimeout(debouncedId); clearInterval(intervalId); sub.remove(); };
-  }, [config.sunriseMin, isGhatika, JSON.stringify(config.notifs)]);
+  }, [config.sunriseMin, isGhatika, JSON.stringify(config.notifs), notifReady]);
 
   const screens = {
     home:     <HomeScreen config={config} isGhatika={isGhatika} manualSvara={manualSvara} hasFullAccess={hasFullAccess}/>,
