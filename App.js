@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform, Image, Linking } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SunCalc from 'suncalc';
@@ -694,7 +694,7 @@ function TimelineScreen({ config, isGhatika }) {
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
-function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika, isPremium, iapPrice, iapBusy, requestPremium, restorePremium }) {
+function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika, isPremium, iapPrice, iapBusy, requestPremium, restorePremium, notifStatus, requestNotifPermission, openNotifSettings }) {
   // Mode = 'auto' (GPS on every app open) | 'gps-once' (GPS now, fixed) | 'manual' (typed)
   const [mode,    setMode]    = useState(config.locationMode === 'auto' ? 'auto' : config.locationMode === 'gps' ? 'gps-once' : 'manual');
   const [city,    setCity]    = useState(config.city);
@@ -847,6 +847,37 @@ function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika, isPremium,
               </TouchableOpacity>
             </View>
           )}
+        </View>
+
+        {/* ── NOTIFICATIONS STATUS ─────────────────────────────────────── */}
+        <Text style={s.sectionLabel}>🔔  Notifications</Text>
+        <View style={s.settingCard}>
+          <View style={{padding:14,gap:10}}>
+            <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
+              <Text style={{color:C.goldLight,fontSize:13}}>Status:</Text>
+              <Text style={{color: notifStatus?.status === 'granted' ? '#7fcf8a' : notifStatus?.status === 'denied' ? '#e88a8a' : C.muted, fontSize:13, fontWeight:'500'}}>
+                {notifStatus?.status === 'granted' ? '✓ Enabled' :
+                 notifStatus?.status === 'denied'  ? '✗ Blocked' :
+                 notifStatus?.status === 'undetermined' ? '? Not requested' :
+                 notifStatus?.status || 'unknown'}
+              </Text>
+            </View>
+            {notifStatus?.status !== 'granted' && (
+              <>
+                <Text style={{color:C.muted,fontSize:11,lineHeight:16,fontStyle:'italic'}}>
+                  {notifStatus?.canAskAgain
+                    ? 'Tap "Request permission" to enable nadi & tattva notifications.'
+                    : 'Notifications are blocked at the system level. Open system Settings to enable them manually.'}
+                </Text>
+                <TouchableOpacity onPress={notifStatus?.canAskAgain ? requestNotifPermission : openNotifSettings} activeOpacity={0.75}
+                  style={{backgroundColor:C.bgCard,borderWidth:1,borderColor:C.gold,borderRadius:10,paddingVertical:11,alignItems:'center',marginTop:4}}>
+                  <Text style={{color:C.gold,fontSize:14,fontWeight:'500'}}>
+                    {notifStatus?.canAskAgain ? 'Request permission' : 'Open Settings'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         </View>
 
         <Text style={s.sectionLabel}>📍  Location</Text>
@@ -1409,6 +1440,12 @@ function InnerApp() {
   //   opened (the useEffect re-runs).
   // - We tag scheduled notifications with identifier='svara-tx' so we cancel
   //   only ours, not user-test ones.
+  // Concurrency lock — scheduleAll() reads this and refuses to run if a prior
+  // call hasn't finished. Without it, the refill listener firing during a
+  // config change re-schedule could double-queue 500 notifications, with many
+  // landing on the same minute (that's how 49 notifications could arrive at
+  // the exact same time).
+  const schedulingRef = useRef(false);
   useEffect(() => {
     const TATTVA_INFO = {
       prithvi: { emoji:'🌍', name:'Prithvi', desc:'Earth · stable, grounding. Good for steady work.' },
@@ -1428,14 +1465,26 @@ function InnerApp() {
       // channel are both confirmed ready. Prevents races during first-install
       // permission prompt on Android 13+.
       if (!notifReady) return;
+      // Concurrency lock: prevent scheduleAll from running in parallel with
+      // itself (which could happen when the refill listener fires while a
+      // config change is also re-scheduling). Two parallel runs would each
+      // see the queue as empty after their own cancel and both queue 500 new
+      // notifications → 1000 notifications, many at the same minute.
+      if (schedulingRef.current) return;
+      schedulingRef.current = true;
       try {
-        // Clear any previously scheduled svara notifications
-        const all = await Notifications.getAllScheduledNotificationsAsync();
-        for (const n of (all || [])) {
-          if (n.content?.data?.kind === 'svara-tx') {
-            try { await Notifications.cancelScheduledNotificationAsync(n.identifier); } catch(e) {}
-          }
-        }
+        // FULL cleanup — cancel ALL scheduled notifications, not just our
+        // svara-tx kind. This is critical because:
+        //  (a) old app versions (105, 108, 111, 112…) left orphan alarms in
+        //      Android's AlarmManager that we can't selectively identify any
+        //      more — they all stack at predictable minutes (sunrise + N), so
+        //      49 of them can deliver at once.
+        //  (b) cancelAllScheduledNotificationsAsync is O(1) at the OS level
+        //      and clearing everything is the only safe way to avoid the
+        //      orphan-stacking bug.
+        // We control the entire notification namespace for this app, so
+        // cancelling all is safe (we don't have non-svara notifications).
+        await Notifications.cancelAllScheduledNotificationsAsync();
 
         const now = new Date();
         const nowMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
@@ -1540,7 +1589,10 @@ function InnerApp() {
             });
           }
         }
-      } catch(e) {}
+      } catch(e) {
+      } finally {
+        schedulingRef.current = false;
+      }
     };
 
     // Debounce: wait 1.5s after deps change before re-scheduling. This avoids
@@ -1552,17 +1604,107 @@ function InnerApp() {
     const intervalId = setInterval(scheduleAll, 10*60*1000);
     // LOOP REFILL: each time a svara-tx notification is received (or wakes the
     // app briefly), top up the queue so the buffer never empties. Combined with
-    // the 50-item buffer, this gives strong overnight coverage even when the
-    // app is closed for long stretches.
+    // the buffer, this gives strong coverage even when the app is closed for
+    // long stretches.
+    // Debounced 5s — if 3 notifications fire within the same minute we only
+    // re-schedule once, not three times in parallel.
+    let refillTimeout = null;
     const sub = Notifications.addNotificationReceivedListener((notif) => {
       try {
         if (notif?.request?.content?.data?.kind === 'svara-tx') {
-          scheduleAll();
+          if (refillTimeout) clearTimeout(refillTimeout);
+          refillTimeout = setTimeout(() => { scheduleAll(); }, 5000);
         }
       } catch(e) {}
     });
-    return () => { clearTimeout(debouncedId); clearInterval(intervalId); sub.remove(); };
+    return () => {
+      clearTimeout(debouncedId);
+      clearInterval(intervalId);
+      if (refillTimeout) clearTimeout(refillTimeout);
+      sub.remove();
+    };
   }, [config.sunriseMin, isGhatika, JSON.stringify(config.notifs), notifReady]);
+
+  // ── NOTIFICATION STATUS HELPERS ─────────────────────────────────────────────
+  // Exposed to Settings so users can see actual status + manually retrigger
+  // request or open OS settings as fallback.
+  const [notifStatus, setNotifStatus] = useState({ status: 'unknown', canAskAgain: true });
+
+  const refreshNotifStatus = async () => {
+    try {
+      const s = await Notifications.getPermissionsAsync();
+      setNotifStatus({ status: s.status, canAskAgain: s.canAskAgain });
+      return s;
+    } catch(e) {
+      setNotifStatus({ status: 'error', canAskAgain: false });
+      return { status: 'error', canAskAgain: false };
+    }
+  };
+
+  // Refresh status whenever app comes back to foreground (e.g. user went to
+  // OS settings, changed permission, came back).
+  useEffect(() => {
+    refreshNotifStatus();
+    const sub = require('react-native').AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshNotifStatus();
+    });
+    return () => { try { sub.remove(); } catch(e) {} };
+  }, []);
+
+  const requestNotifPermission = async () => {
+    try {
+      const current = await refreshNotifStatus();
+      if (current.status === 'granted') {
+        Alert.alert('Already enabled', 'Notifications are already enabled.');
+        return;
+      }
+      if (!current.canAskAgain) {
+        // OS won't let us show the dialog anymore — must direct user to settings
+        Alert.alert(
+          'Notifications blocked',
+          'Notifications are blocked at the system level. Tap "Open Settings" to enable them manually.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+      const req = await Notifications.requestPermissionsAsync({
+        android: {},
+        ios: { allowAlert:true, allowSound:true, allowBadge:false },
+      });
+      await refreshNotifStatus();
+      if (req.status === 'granted') {
+        // Create channel + mark ready (same as in initial useEffect)
+        if (Platform.OS === 'android') {
+          try {
+            await Notifications.setNotificationChannelAsync('svara-transitions', {
+              name: 'Svara Transitions',
+              description: 'Notifications when nadi or tattva changes',
+              importance: Notifications.AndroidImportance.HIGH,
+              vibrationPattern: [0, 250, 250, 250],
+              lightColor: '#c9a96e',
+              sound: 'default',
+              enableVibrate: true,
+              showBadge: false,
+              bypassDnd: false,
+            });
+          } catch(e) {}
+        }
+        setNotifReady(true);
+        Alert.alert('Enabled ✓', 'Notifications are now enabled.');
+      } else {
+        Alert.alert('Not granted', 'Notification permission was not granted. You can enable it later in Settings.');
+      }
+    } catch(e) {
+      Alert.alert('Error', e?.message || 'Could not request permission.');
+    }
+  };
+
+  const openNotifSettings = () => {
+    Linking.openSettings();
+  };
 
   const screens = {
     home:     <HomeScreen config={config} isGhatika={isGhatika} manualSvara={manualSvara} hasFullAccess={hasFullAccess}/>,
@@ -1571,7 +1713,8 @@ function InnerApp() {
     timeline: <TimelineScreen config={config} isGhatika={isGhatika}/>,
     settings: <SettingsScreen config={config} setConfig={setConfig} isGhatika={isGhatika} setIsGhatika={setIsGhatika}
                               isPremium={isPremium} iapPrice={iapPrice} iapBusy={iapBusy}
-                              requestPremium={requestPremium} restorePremium={restorePremium}/>,
+                              requestPremium={requestPremium} restorePremium={restorePremium}
+                              notifStatus={notifStatus} requestNotifPermission={requestNotifPermission} openNotifSettings={openNotifSettings}/>,
   };
 
   return (
