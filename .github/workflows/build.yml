@@ -13,136 +13,65 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Show pre-installed tool versions
+      - name: Ensure Java 17 and SDK 35
         run: |
-          echo "Node: $(node -v)"
-          echo "npm:  $(npm -v)"
-          echo "Java: $(java -version 2>&1 | head -1)"
-          echo "ANDROID_HOME=$ANDROID_HOME"
+          sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
+          SDKMGR=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)
+          yes | "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null
 
-      - name: Ensure Java 17 is selected
-        run: |
-          JAVA17=$(ls -d /usr/lib/jvm/temurin-17* /usr/lib/jvm/*17* 2>/dev/null | head -1)
-          if [ -z "$JAVA17" ]; then
-            sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
-            JAVA17=$(ls -d /usr/lib/jvm/*17* | head -1)
-          fi
-          echo "JAVA_HOME=$JAVA17" >> "$GITHUB_ENV"
-          echo "$JAVA17/bin" >> "$GITHUB_PATH"
-
-      - name: Ensure Android SDK 35 is installed
-        run: |
-          SDKMGR=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
-          if [ -z "$SDKMGR" ] && [ -n "$(which sdkmanager)" ]; then SDKMGR=$(which sdkmanager); fi
-          if [ -n "$SDKMGR" ]; then
-            yes | "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null 2>&1 || true
-          fi
-
-      - name: Compute version constants
+      - name: Compute version
         id: version
         run: |
-          VERSION_BASE=$(node -p "require('./app.json').expo.version || require('./app.json').version")
-          GIT_COMMITS=$(git rev-list --count HEAD)
-          BUILD_NUMBER=$((GIT_COMMITS + 100))
-          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION_BASE=$(node -p "require('./app.json').expo.version")
+          BUILD_NUMBER=$(( $(git rev-list --count HEAD) + 100 ))
           VERSION_NAME="${VERSION_BASE}-b${BUILD_NUMBER}"
-          echo "vcode=${BUILD_NUMBER}"             >> "$GITHUB_OUTPUT"
-          echo "vname=${VERSION_NAME}"             >> "$GITHUB_OUTPUT"
-          echo "apk_name=svara-yoga-v${VERSION_NAME}.apk" >> "$GITHUB_OUTPUT"
-          echo "aab_name=svara-yoga-v${VERSION_NAME}.aab" >> "$GITHUB_OUTPUT"
-          echo "Building version: ${VERSION_NAME} (Code: ${BUILD_NUMBER})"
+          echo "vcode=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "vname=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: npm install
 
-      - name: Prebuild Android project
+      - name: Prebuild
         run: npx expo prebuild --platform android --clean --no-install
-        env:
-          CI: 1
 
-      - name: Force Gradle to ignore Sonatype Snapshots globally
+      - name: Force Fix Sonatype Snapshots
         run: |
-          cat << 'EOF' > android/sonatype_block.gradle
-          allprojects {
-              gradle.projectsEvaluated {
-                  repositories.removeIf { repo ->
-                      repo instanceof MavenArtifactRepository &&
-                      repo.url.toString().contains("oss.sonatype.org/content/repositories/snapshots")
-                  }
-              }
-          }
-          EOF
-          cat android/sonatype_block.gradle >> android/build.gradle
-          find android -name "build.gradle" -type f -exec sed -i 's|https://oss.sonatype.org/content/repositories/snapshots|https://repo1.maven.org/maven2|g' {} +
-          find node_modules -name "build.gradle" -type f -exec sed -i 's|https://oss.sonatype.org/content/repositories/snapshots|https://repo1.maven.org/maven2|g' {} +
+          find android -name "build.gradle" -type f -exec sed -i '/sonatype/d' {} +
+          echo "allprojects { gradle.projectsEvaluated { repositories.removeIf { it.name.contains('sonatype') } } }" >> android/build.gradle
 
-      - name: Bundle JavaScript assets
+      - name: Bundle JS
         run: |
           mkdir -p android/app/src/main/assets
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res
+          npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
 
-      - name: Extract signing keystore
-        id: keystore
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        run: |
-          if [ -z "$SIGNING_KEY" ]; then
-            echo "have_release_key=false" >> "$GITHUB_OUTPUT"
-          else
-            printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 -d > android/app/release.keystore
-            echo "have_release_key=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Compile Release APK and AAB
+      - name: Compile
         run: |
           cd android
           chmod +x gradlew
-          GRADLE_ARGS="-PapkName=${{ steps.version.outputs.apk_name }} -Pandroid.injected.version.code=${{ steps.version.outputs.vcode }} -Pandroid.injected.version.name=${{ steps.version.outputs.vname }}"
-          if [ "${{ steps.keystore.outputs.have_release_key }}" = "true" ]; then
-            ./gradlew assembleRelease bundleRelease $GRADLE_ARGS \
-              -Pandroid.injected.signing.store.file=release.keystore \
-              -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
-              -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
-              -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD || secrets.KEYSTORE_PASSWORD }}" \
-              --no-daemon --stacktrace
-          else
-            ./gradlew assembleRelease bundleRelease $GRADLE_ARGS --no-daemon --stacktrace
-          fi
+          ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
-      - name: Process and gather output artifacts
+      - name: Process artifacts
         run: |
           mkdir -p dist
-          APK_SRC=$(find android/app/build/outputs -name "*.apk" | grep "release" | head -1)
-          AAB_SRC=$(find android/app/build/outputs -name "*.aab" | grep "release" | head -1)
-          if [ -z "$APK_SRC" ] || [ -z "$AAB_SRC" ]; then
-            echo "❌ BUILD FAILED: Fișierele nu au fost generate!"
-            ls -R android/app/build/outputs
+          # Căutăm orice apk/aab în tot arborele de build
+          APK=$(find . -name "*.apk" | grep "release" | head -1)
+          AAB=$(find . -name "*.aab" | grep "release" | head -1)
+          
+          if [ -z "$APK" ] || [ -z "$AAB" ]; then
+            echo "❌ BUILD FAILED: Fișierele release nu există."
+            echo "Structura de fișiere generată:"
+            find android/app/build/outputs -maxdepth 4
             exit 1
           fi
-          cp "$APK_SRC" "dist/${{ steps.version.outputs.apk_name }}"
-          cp "$AAB_SRC" "dist/${{ steps.version.outputs.aab_name }}"
+          
+          cp "$APK" "dist/svara-yoga-v${{ steps.version.outputs.vname }}.apk"
+          cp "$AAB" "dist/svara-yoga-v${{ steps.version.outputs.vname }}.aab"
 
-      - name: Upload artifacts
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: svara-yoga-build
           path: dist/
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.vname }}
-          name: Svara Yoga v${{ steps.version.outputs.vname }}
-          files: |
-            dist/${{ steps.version.outputs.apk_name }}
-            dist/${{ steps.version.outputs.aab_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
