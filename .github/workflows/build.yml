@@ -13,7 +13,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # ── Setup tools direct din environment ───────────────────────────
       - name: Show pre-installed tool versions
         run: |
           echo "Node: $(node -v)"
@@ -39,27 +38,19 @@ jobs:
             yes | "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null 2>&1 || true
           fi
 
-      # ── Strategie stabilă de Versioning ──────────────────────────────
       - name: Compute version constants
         id: version
         run: |
           VERSION_BASE=$(node -p "require('./app.json').expo.version || require('./app.json').version")
-          
-          # OFFSET +100 PENTRU GOOGLE PLAY (Să fim siguri că depășim 106)
           GIT_COMMITS=$(git rev-list --count HEAD)
           BUILD_NUMBER=$((GIT_COMMITS + 100))
-          
           SHORT_SHA=$(git rev-parse --short HEAD)
           VERSION_NAME="${VERSION_BASE}-b${BUILD_NUMBER}"
-          
           echo "vcode=${BUILD_NUMBER}"             >> "$GITHUB_OUTPUT"
           echo "vname=${VERSION_NAME}"             >> "$GITHUB_OUTPUT"
-          echo "base=${VERSION_BASE}"              >> "$GITHUB_OUTPUT"
-          echo "short_sha=${SHORT_SHA}"            >> "$GITHUB_OUTPUT"
           echo "apk_name=svara-yoga-v${VERSION_NAME}.apk" >> "$GITHUB_OUTPUT"
           echo "aab_name=svara-yoga-v${VERSION_NAME}.aab" >> "$GITHUB_OUTPUT"
-          
-          echo "Building Svara Yoga version: ${VERSION_NAME} (Code: ${BUILD_NUMBER})"
+          echo "Building version: ${VERSION_NAME} (Code: ${BUILD_NUMBER})"
 
       - name: Install dependencies
         run: npm install
@@ -69,14 +60,9 @@ jobs:
         env:
           CI: 1
 
-     # ── Remediu agresiv: Forțăm Gradle să ignore serverul Sonatype ──
       - name: Force Gradle to ignore Sonatype Snapshots globally
         run: |
-          echo "Injecting global repository filter into android/build.gradle..."
-          
-          # Creăm un bloc de cod Gradle care filtrează repository-urile la nivelul tuturor proiectelor
           cat << 'EOF' > android/sonatype_block.gradle
-
           allprojects {
               gradle.projectsEvaluated {
                   repositories.removeIf { repo ->
@@ -86,15 +72,9 @@ jobs:
               }
           }
           EOF
-          
-          # Îl adăugăm la finalul fișierului android/build.gradle
           cat android/sonatype_block.gradle >> android/build.gradle
-          
-          # Și, pentru siguranță, înlocuim și URL-ul direct în fișierele unde ar mai putea fi hardcodat
           find android -name "build.gradle" -type f -exec sed -i 's|https://oss.sonatype.org/content/repositories/snapshots|https://repo1.maven.org/maven2|g' {} +
           find node_modules -name "build.gradle" -type f -exec sed -i 's|https://oss.sonatype.org/content/repositories/snapshots|https://repo1.maven.org/maven2|g' {} +
-
-      # ── NOTĂ: Am eliminat pasul de Patch expo-modules-core, deoarece Expo SDK 52 a rezolvat bug-ul nativ ──
 
       - name: Bundle JavaScript assets
         run: |
@@ -116,78 +96,53 @@ jobs:
             echo "have_release_key=false" >> "$GITHUB_OUTPUT"
           else
             printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 -d > android/app/release.keystore
-            if ! keytool -list -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
-              echo "❌ ERROR: KEYSTORE_PASSWORD verification failed!"
-              exit 1
-            fi
             echo "have_release_key=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── Build curat cu injectare securizată de argumente ───────────
       - name: Compile Release APK and AAB
         run: |
           cd android
-          
-          # Parametrii comuni injectați direct în Gradle pentru versiuni
+          chmod +x gradlew
           GRADLE_ARGS="-PapkName=${{ steps.version.outputs.apk_name }} -Pandroid.injected.version.code=${{ steps.version.outputs.vcode }} -Pandroid.injected.version.name=${{ steps.version.outputs.vname }}"
-          
-          # Injectare dinamică a acreditărilor de securitate (fără rescriere de fișiere)
           if [ "${{ steps.keystore.outputs.have_release_key }}" = "true" ]; then
-            echo "Compiling with Production Release Signing..."
             ./gradlew assembleRelease bundleRelease $GRADLE_ARGS \
               -Pandroid.injected.signing.store.file=release.keystore \
               -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
               -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
               -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD || secrets.KEYSTORE_PASSWORD }}" \
-              --no-daemon --stacktrace 2>&1 | tee /tmp/build.log
+              --no-daemon --stacktrace
           else
-            echo "Compiling with fallback Debug Signing..."
-            ./gradlew assembleRelease bundleRelease $GRADLE_ARGS \
-              --no-daemon --stacktrace 2>&1 | tee /tmp/build.log
+            ./gradlew assembleRelease bundleRelease $GRADLE_ARGS --no-daemon --stacktrace
           fi
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
       - name: Process and gather output artifacts
-        id: rename
         run: |
           mkdir -p dist
-          APK_SRC=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
-          AAB_SRC=$(find android/app/build/outputs/bundle/release -name "*.aab" -type f | head -1)
-          
+          APK_SRC=$(find android/app/build/outputs -name "*.apk" | grep "release" | head -1)
+          AAB_SRC=$(find android/app/build/outputs -name "*.aab" | grep "release" | head -1)
+          if [ -z "$APK_SRC" ] || [ -z "$AAB_SRC" ]; then
+            echo "❌ BUILD FAILED: Fișierele nu au fost generate!"
+            ls -R android/app/build/outputs
+            exit 1
+          fi
           cp "$APK_SRC" "dist/${{ steps.version.outputs.apk_name }}"
           cp "$AAB_SRC" "dist/${{ steps.version.outputs.aab_name }}"
-          
-          echo "apk_path=dist/${{ steps.version.outputs.apk_name }}" >> "$GITHUB_OUTPUT"
-          echo "aab_path=dist/${{ steps.version.outputs.aab_name }}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload artifacts to workflow run
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: svara-yoga-build-${{ steps.version.outputs.vname }}
+          name: svara-yoga-build
           path: dist/
-          retention-days: 30
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.vname }}
           name: Svara Yoga v${{ steps.version.outputs.vname }}
-          body: |
-            ### Svara Yoga Production Build
-            
-            - **Version Display (Name):** `${{ steps.version.outputs.vname }}`
-            - **Play Store Version Code:** `${{ steps.version.outputs.vcode }}`
-            - **Base Manifest Version:** `${{ steps.version.outputs.base }}`
-            - **Git Commit:** `${{ steps.version.outputs.short_sha }}`
-            - **Signing Security:** `${{ steps.keystore.outputs.have_release_key == 'true' && '🔒 RELEASE (Google Play Ready)' || '⚠️ DEBUG' }}`
-            
-            * Pentru testare rapidă pe dispozitiv, descărcați fișierul `.apk`.
-            * Pentru actualizări în Google Play Console, folosiți pachetul `.aab`.
           files: |
             dist/${{ steps.version.outputs.apk_name }}
             dist/${{ steps.version.outputs.aab_name }}
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
