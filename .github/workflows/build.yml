@@ -69,12 +69,30 @@ jobs:
         env:
           CI: 1
 
-      # ── Remediu critic: Blocare Sonatype 504 Gateway Time-out ───────
-      - name: Strip broken Sonatype repositories from generated files
+     # ── Remediu agresiv: Forțăm Gradle să ignore serverul Sonatype ──
+      - name: Force Gradle to ignore Sonatype Snapshots globally
         run: |
-          echo "Cleaning snapshot repositories from build.gradle files..."
-          find android -name "build.gradle" -type f -exec sed -i '/oss.sonatype.org\/content\/repositories\/snapshots/d' {} +
-          find android -name "build.gradle" -type f -exec sed -i '/sonatype.org/d' {} +
+          echo "Injecting global repository filter into android/build.gradle..."
+          
+          # Creăm un bloc de cod Gradle care filtrează repository-urile la nivelul tuturor proiectelor
+          cat << 'EOF' > android/sonatype_block.gradle
+
+          allprojects {
+              gradle.projectsEvaluated {
+                  repositories.removeIf { repo ->
+                      repo instanceof MavenArtifactRepository &&
+                      repo.url.toString().contains("oss.sonatype.org/content/repositories/snapshots")
+                  }
+              }
+          }
+          EOF
+          
+          # Îl adăugăm la finalul fișierului android/build.gradle
+          cat android/sonatype_block.gradle >> android/build.gradle
+          
+          # Și, pentru siguranță, înlocuim și URL-ul direct în fișierele unde ar mai putea fi hardcodat
+          find android -name "build.gradle" -type f -exec sed -i 's|https://oss.sonatype.org/content/repositories/snapshots|https://repo1.maven.org/maven2|g' {} +
+          find node_modules -name "build.gradle" -type f -exec sed -i 's|https://oss.sonatype.org/content/repositories/snapshots|https://repo1.maven.org/maven2|g' {} +
 
       # ── NOTĂ: Am eliminat pasul de Patch expo-modules-core, deoarece Expo SDK 52 a rezolvat bug-ul nativ ──
 
