@@ -1,6 +1,6 @@
 name: Build Android APK
 on:
-  workflow_dispatch:      # Manual only — click "Run workflow" in the Actions tab.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -43,16 +43,13 @@ jobs:
       - name: Compute version constants
         id: version
         run: |
-          # Extrage versiunea curată din app.json (ex: 2.0)
           VERSION_BASE=$(node -p "require('./app.json').expo.version || require('./app.json').version")
           
-          # PUNEM UN OFFSET (+100) CA SĂ FIM SIGURI CĂ DEPĂȘIM VERSIUNEA 106 DIN GOOGLE PLAY
+          # OFFSET +100 PENTRU GOOGLE PLAY (Să fim siguri că depășim 106)
           GIT_COMMITS=$(git rev-list --count HEAD)
           BUILD_NUMBER=$((GIT_COMMITS + 100))
           
           SHORT_SHA=$(git rev-parse --short HEAD)
-          
-          # Numele versiunii finale (ex: 2.0-b142)
           VERSION_NAME="${VERSION_BASE}-b${BUILD_NUMBER}"
           
           echo "vcode=${BUILD_NUMBER}"             >> "$GITHUB_OUTPUT"
@@ -79,13 +76,7 @@ jobs:
           find android -name "build.gradle" -type f -exec sed -i '/oss.sonatype.org\/content\/repositories\/snapshots/d' {} +
           find android -name "build.gradle" -type f -exec sed -i '/sonatype.org/d' {} +
 
-      - name: Patch expo-modules-core for SDK 35 nullability
-        run: |
-          F=node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/permissions/PermissionsService.kt
-          if [ -f "$F" ] && grep -q "return requestedPermissions\.contains(permission)" "$F"; then
-            sed -i 's/return requestedPermissions\.contains(permission)/return requestedPermissions?.contains(permission) ?: false/' "$F"
-            echo "✅ Patch implemented successfully"
-          fi
+      # ── NOTĂ: Am eliminat pasul de Patch expo-modules-core, deoarece Expo SDK 52 a rezolvat bug-ul nativ ──
 
       - name: Bundle JavaScript assets
         run: |
