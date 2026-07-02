@@ -56,7 +56,11 @@ jobs:
         run: |
           BASE=$(node -p "require('./app.json').expo.version")
           MAJOR=$(echo "$BASE" | cut -d. -f1)
-          BUILD=$(git rev-list --count HEAD)
+          # versionCode base = commit count + 200 offset. The offset skips
+          # past all versionCodes ever used in Play Store (108, 111, 116, 218,
+          # 220, 228, 230…) so no upload conflicts. With commit count 105 on
+          # v1.105, this makes versionCode 305 — safely above every previous.
+          BUILD=$(( $(git rev-list --count HEAD) + 200 ))
           SHORT_SHA=$(git rev-parse --short HEAD)
           FULL="${MAJOR}.${BUILD}"
           echo "base=${BASE}"          >> "$GITHUB_OUTPUT"
