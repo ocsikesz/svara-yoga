@@ -8,6 +8,7 @@ import * as RNIap from 'react-native-iap';
 import { C, hd, td, s, tl, ss } from './src/constants/theme';
 import { PREMIUM_SKU, TABS, TATTVAS_CLASSIC, TATTVAS_GHATIKA, TATTVA_IMG, NADI_IMG, SHLOKAS, LUNAR_DAYS, RECOMMENDATIONS, DEFAULT_LAT, DEFAULT_LNG } from './src/constants/data';
 import { calcSunrise, getLunarDay, getSvaraFromSunrise, getNextNadiChange, formatDuration, getTattvaFromSunrise, getTattvaTimeline, getTattvaProgress } from './src/utils/timeMath';
+import AppHeader from './src/components/AppHeader';
 
 // IAP product ID — must match the SKU created in Google Play Console.
 // Single non-consumable product (one-time premium unlock, no subscription).
@@ -25,28 +26,6 @@ Notifications.setNotificationHandler({
 
 
 // Logo + page subtitle + current time, shown on every screen.
-function AppHeader({ subtitle }) {
-  const [timeStr, setTimeStr] = useState(() => {
-    const n = new Date();
-    return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
-  });
-  useEffect(() => {
-    const id = setInterval(() => {
-      const n = new Date();
-      setTimeStr(`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`);
-    }, 10000);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <View style={hd.header}>
-      <Image source={require('./assets/logo-header.png')} style={hd.logoHeader} resizeMode="contain"/>
-      <View style={hd.headerRow}>
-        <Text style={hd.subtitle}>{subtitle}</Text>
-        <Text style={hd.timeLabel}>{timeStr}</Text>
-      </View>
-    </View>
-  );
-}
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
 function HomeScreen({ config, isGhatika, manualSvara, hasFullAccess }) {
