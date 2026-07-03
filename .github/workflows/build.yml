@@ -36,31 +36,47 @@ jobs:
       - name: Prebuild
         run: npx expo prebuild --platform android --clean --no-install
 
+      - name: Bundle JavaScript
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
+
+      - name: Decode keystore
+        id: keystore
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          if [ -n "$SIGNING_KEY" ]; then
+            printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 -d > android/app/release.keystore
+            echo "have_release_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_release_key=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Fix Sonatype and Build
         run: |
-          # Curățare agresivă
           find android -name "build.gradle" -type f -exec sed -i '/sonatype/d' {} +
           cd android
           chmod +x gradlew
-          ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace
+          if [ "${{ steps.keystore.outputs.have_release_key }}" = "true" ]; then
+            ./gradlew clean assembleRelease bundleRelease \
+              -Pandroid.injected.signing.store.file=release.keystore \
+              -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+              -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+              -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD || secrets.KEYSTORE_PASSWORD }}" \
+              --no-daemon --stacktrace
+          else
+            ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace
+          fi
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
-      - name: Debug and Collect Artifacts
+      - name: Collect Artifacts
         run: |
           mkdir -p dist
-          echo "--- Structura outputs ---"
-          find android/app/build/outputs -name "*.apk" -o -name "*.aab"
-          
-          # Căutăm fișierele oriunde s-au generat
           APK=$(find android/app/build/outputs -name "*.apk" | head -1)
           AAB=$(find android/app/build/outputs -name "*.aab" | head -1)
-          
-          if [ -z "$APK" ] || [ -z "$AAB" ]; then
-            echo "❌ BUILD FAILED: Fișierele release nu au fost generate."
-            exit 1
-          fi
-          
+          if [ -z "$APK" ] || [ -z "$AAB" ]; then exit 1; fi
           cp "$APK" "dist/${{ steps.version.outputs.apk_name }}"
           cp "$AAB" "dist/${{ steps.version.outputs.aab_name }}"
 
