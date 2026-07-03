@@ -47,15 +47,17 @@
       ],
       "expo-notifications",
       [
-        "expo-build-properties",
-        {
-          "android": {
-            "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
-            "buildToolsVersion": "35.0.0"
-          }
-        }
-      ],
+  "expo-build-properties",
+  {
+    "android": {
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
+      "buildToolsVersion": "35.0.0",
+      "kotlinVersion": "1.9.24",
+      "uncompressedNativeLibsEnabled": true
+    }
+  }
+],
       "react-native-iap"
     ],
     "extra": {
