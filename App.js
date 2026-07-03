@@ -323,6 +323,14 @@ function InnerApp() {
           });
         }
 
+        // Fresh-install cleanup: on very first launch after install, wipe
+        // any stale notifications that Android kept from a prior version of
+        // this app. Android doesn't dismiss on uninstall — the shade can
+        // hold delivered items for hours. Both calls are safe if the queue
+        // and shade are empty.
+        try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
+        try { await Notifications.dismissAllNotificationsAsync(); } catch(e) {}
+
         setNotifReady(true);
       } catch(e) {}
     })();
@@ -380,6 +388,14 @@ function InnerApp() {
         // Safe because we own the entire notification namespace in this
         // app (no non-svara notifications shipped).
         await Notifications.cancelAllScheduledNotificationsAsync();
+        // ALSO dismiss anything already sitting in the status bar. Android
+        // does NOT dismiss notifications when an app is uninstalled — old
+        // notifications from previous installs of THIS package can persist
+        // in the shade for hours/days. This is why the user saw 49
+        // notifications immediately after a fresh install: they were
+        // leftover items from the prior version that got 'bug-bombed'.
+        // dismissAll clears them.
+        await Notifications.dismissAllNotificationsAsync();
 
         const now = new Date();
         const nowMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
