@@ -52,9 +52,7 @@
           "android": {
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
-            "buildToolsVersion": "35.0.0",
-            "kotlinVersion": "1.9.24",
-            "uncompressedNativeLibsEnabled": false
+            "buildToolsVersion": "35.0.0"
           }
         }
       ],
