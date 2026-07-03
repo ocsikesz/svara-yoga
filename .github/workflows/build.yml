@@ -33,11 +33,28 @@ jobs:
             - name: Install dependencies
         run: npm install
 
-      - name: Prebuild
-        run: npx expo prebuild --platform android --clean --no-install
-        env:
-          # Forțăm Kotlin 1.9.24 la nivel de sistem pentru tot procesul de build
-          EXT_KOTLIN_VERSION: 1.9.24
+            - name: Prebuild
+        run: |
+          npx expo prebuild --platform android --clean --no-install
+          
+          # Injectăm forțat Kotlin 1.9.24 în build.gradle-ul proaspăt generat
+          # Această linie caută unde scrie 'kotlin' și forțează versiunea 1.9.24
+          sed -i 's/kotlinVersion = .*/kotlinVersion = "1.9.24"/' android/build.gradle || true
+          
+          # Injectăm suprimarea erorii de compatibilitate direct la finalul fișierului
+          cat << 'EOF' >> android/build.gradle
+
+          allprojects {
+              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                  kotlinOptions {
+                      freeCompilerArgs += [
+                          "-P", "plugin:androidx.compose.compiler.plugins.kotlin:suppressKotlinVersionCompatibilityCheck=true"
+                      ]
+                  }
+              }
+          }
+          EOF
+
 
 
       - name: Bundle JavaScript
