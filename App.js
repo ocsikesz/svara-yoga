@@ -286,11 +286,29 @@ function InnerApp() {
     })();
   }, [isGhatika]);
 
-  // Request notification permissions + create Android notification channel
+  // Notification permission + channel setup — Android 13+ requires this order:
+  //   1. requestPermissionsAsync() — MUST be first. Creating the channel
+  //      before the permission is granted can trigger a native crash on
+  //      Android 13+ (permission race).
+  //   2. Once granted, setNotificationChannelAsync() creates the channel.
+  //   3. Set notifReady=true. All scheduling code guards on this so it
+  //      never touches the notification system while permission is pending.
+  const [notifReady, setNotifReady] = useState(false);
   useEffect(() => {
     (async () => {
       try {
-        // Android 8+ requires a notification channel to display notifications
+        const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+        let finalStatus = status;
+        if (status !== 'granted' && canAskAgain) {
+          const result = await Notifications.requestPermissionsAsync({
+            android: {},
+            ios: { allowAlert:true, allowSound:true, allowBadge:false },
+          });
+          finalStatus = result.status;
+        }
+        if (finalStatus !== 'granted') return; // notifReady stays false
+
+        // Only NOW create the channel — permission is granted.
         if (Platform.OS === 'android') {
           await Notifications.setNotificationChannelAsync('svara-transitions', {
             name: 'Svara Transitions',
@@ -305,13 +323,7 @@ function InnerApp() {
           });
         }
 
-        const { status, canAskAgain } = await Notifications.getPermissionsAsync();
-        if (status !== 'granted' && canAskAgain) {
-          await Notifications.requestPermissionsAsync({
-            android: {},
-            ios: { allowAlert:true, allowSound:true, allowBadge:false },
-          });
-        }
+        setNotifReady(true);
       } catch(e) {}
     })();
   }, []);
@@ -324,6 +336,12 @@ function InnerApp() {
   //   opened (the useEffect re-runs).
   // - We tag scheduled notifications with identifier='svara-tx' so we cancel
   //   only ours, not user-test ones.
+  // Concurrency lock — scheduleAll() reads this and refuses to run if a prior
+  // call hasn't finished. Without it, the refill listener firing during a
+  // config change re-schedule could double-queue 500 notifications, with many
+  // landing on the same minute (that's how 49 notifications can arrive at
+  // the exact same time).
+  const schedulingRef = useRef(false);
   useEffect(() => {
     const TATTVA_INFO = {
       prithvi: { emoji:'🌍', name:'Prithvi', desc:'Earth · stable, grounding. Good for steady work.' },
@@ -339,14 +357,29 @@ function InnerApp() {
     };
 
     const scheduleAll = async () => {
+      // Guard: don't touch notification system until permission + channel
+      // are both confirmed ready. Prevents races on Android 13+ first install.
+      if (!notifReady) return;
+      // Concurrency lock — scheduleAll should never run in parallel with
+      // itself. Without it, the refill listener firing during a config
+      // change could double-queue 500 notifications, with many landing on
+      // the same minute (that's how 49 could arrive together).
+      if (schedulingRef.current) return;
+      schedulingRef.current = true;
       try {
-        // Clear any previously scheduled svara notifications
-        const all = await Notifications.getAllScheduledNotificationsAsync();
-        for (const n of (all || [])) {
-          if (n.content?.data?.kind === 'svara-tx') {
-            try { await Notifications.cancelScheduledNotificationAsync(n.identifier); } catch(e) {}
-          }
-        }
+        // FULL cleanup — cancel ALL scheduled notifications, not just our
+        // svara-tx kind. Critical because:
+        //   (a) old app versions (105, 108, 111, 112, 116, 218, 305–315…)
+        //       left orphan alarms in Android's AlarmManager that we can
+        //       no longer selectively identify. They all stack at
+        //       predictable minutes (sunrise + N), so 49 of them can fire
+        //       at once.
+        //   (b) cancelAllScheduledNotificationsAsync is O(1) at the OS
+        //       level; clearing everything is the only safe way to purge
+        //       orphans.
+        // Safe because we own the entire notification namespace in this
+        // app (no non-svara notifications shipped).
+        await Notifications.cancelAllScheduledNotificationsAsync();
 
         const now = new Date();
         const nowMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
@@ -451,7 +484,10 @@ function InnerApp() {
             });
           }
         }
-      } catch(e) {}
+      } catch(e) {
+      } finally {
+        schedulingRef.current = false;
+      }
     };
 
     // Debounce: wait 1.5s after deps change before re-scheduling. This avoids
@@ -461,19 +497,26 @@ function InnerApp() {
     // Also re-schedule every 10 min while app is open to keep the pipeline fresh
     // as old notifications fire and the 24h window slides forward.
     const intervalId = setInterval(scheduleAll, 10*60*1000);
-    // LOOP REFILL: each time a svara-tx notification is received (or wakes the
-    // app briefly), top up the queue so the buffer never empties. Combined with
-    // the 50-item buffer, this gives strong overnight coverage even when the
-    // app is closed for long stretches.
+    // LOOP REFILL: each time a svara-tx notification is received (or wakes
+    // the app briefly), top up the queue so the buffer never empties.
+    // Debounced 5 s so that when 3 notifications fire within the same minute
+    // we only re-schedule once, not three times in parallel.
+    let refillTimeout = null;
     const sub = Notifications.addNotificationReceivedListener((notif) => {
       try {
         if (notif?.request?.content?.data?.kind === 'svara-tx') {
-          scheduleAll();
+          if (refillTimeout) clearTimeout(refillTimeout);
+          refillTimeout = setTimeout(() => { scheduleAll(); }, 5000);
         }
       } catch(e) {}
     });
-    return () => { clearTimeout(debouncedId); clearInterval(intervalId); sub.remove(); };
-  }, [config.sunriseMin, isGhatika, JSON.stringify(config.notifs)]);
+    return () => {
+      clearTimeout(debouncedId);
+      clearInterval(intervalId);
+      if (refillTimeout) clearTimeout(refillTimeout);
+      sub.remove();
+    };
+  }, [notifReady, config.sunriseMin, isGhatika, JSON.stringify(config.notifs)]);
 
   const screens = {
     home:     <HomeScreen config={config} isGhatika={isGhatika} manualSvara={manualSvara} hasFullAccess={hasFullAccess}/>,
