@@ -30,18 +30,15 @@ jobs:
           echo "apk_name=svara-yoga-v${VERSION_NAME}.apk" >> "$GITHUB_OUTPUT"
           echo "aab_name=svara-yoga-v${VERSION_NAME}.aab" >> "$GITHUB_OUTPUT"
 
-            - name: Install dependencies
+      - name: Install dependencies
         run: npm install
 
-            - name: Prebuild
+      - name: Prebuild and Inject Kotlin Fix
         run: |
           npx expo prebuild --platform android --clean --no-install
           
-          # Injectăm forțat Kotlin 1.9.24 în build.gradle-ul proaspăt generat
-          # Această linie caută unde scrie 'kotlin' și forțează versiunea 1.9.24
+          # Fix Kotlin 1.9.24 si suprimare eroare Compose
           sed -i 's/kotlinVersion = .*/kotlinVersion = "1.9.24"/' android/build.gradle || true
-          
-          # Injectăm suprimarea erorii de compatibilitate direct la finalul fișierului
           cat << 'EOF' >> android/build.gradle
 
           allprojects {
@@ -54,8 +51,6 @@ jobs:
               }
           }
           EOF
-
-
 
       - name: Bundle JavaScript
         run: |
@@ -74,13 +69,20 @@ jobs:
             echo "have_release_key=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fix Sonatype and Build
+      - name: Build Gradle
         run: |
-          find android -name "build.gradle" -type f -exec sed -i '/sonatype/d' {} +
           cd android
           chmod +x gradlew
-          # Adăugăm -PkotlinVersion=1.9.24 pentru a suprascrie orice altă versiune
-          ./gradlew clean assembleRelease bundleRelease -PkotlinVersion=1.9.24 --no-daemon --stacktrace
+          if [ "${{ steps.keystore.outputs.have_release_key }}" = "true" ]; then
+            ./gradlew clean assembleRelease bundleRelease \
+              -Pandroid.injected.signing.store.file=release.keystore \
+              -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+              -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+              -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD || secrets.KEYSTORE_PASSWORD }}" \
+              --no-daemon --stacktrace
+          else
+            ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace
+          fi
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
@@ -89,7 +91,7 @@ jobs:
           mkdir -p dist
           APK=$(find android/app/build/outputs -name "*.apk" | head -1)
           AAB=$(find android/app/build/outputs -name "*.aab" | head -1)
-          if [ -z "$APK" ] || [ -z "$AAB" ]; then exit 1; fi
+          if [ -z "$APK" ] || [ -z "$AAB" ]; then echo "❌ Nu s-au generat fișiere"; exit 1; fi
           cp "$APK" "dist/${{ steps.version.outputs.apk_name }}"
           cp "$AAB" "dist/${{ steps.version.outputs.aab_name }}"
 
