@@ -483,7 +483,14 @@ function InnerApp() {
                 data:  { kind:'svara-tx' },
                 ...androidFields,
               },
-              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
+              // CRITICAL: repeats: false. In expo-notifications 0.29 (SDK 52)
+              // a bare { seconds: N } trigger REPEATS by default at the same
+              // interval, so a notification scheduled for 60 seconds from now
+              // would keep firing every 60 seconds forever. In SDK 51 the
+              // default was non-repeating, so this bug is invisible until
+              // upgrading. Explicit repeats: false restores the intended
+              // one-shot behaviour on both SDKs.
+              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)), repeats: false },
             });
           } else {
             const ni = NADI_INFO[tx.toId];
@@ -496,7 +503,7 @@ function InnerApp() {
                 data:  { kind:'svara-tx' },
                 ...androidFields,
               },
-              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)) },
+              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)), repeats: false },
             });
           }
         }
