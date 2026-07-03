@@ -30,11 +30,15 @@ jobs:
           echo "apk_name=svara-yoga-v${VERSION_NAME}.apk" >> "$GITHUB_OUTPUT"
           echo "aab_name=svara-yoga-v${VERSION_NAME}.aab" >> "$GITHUB_OUTPUT"
 
-      - name: Install dependencies
+            - name: Install dependencies
         run: npm install
 
       - name: Prebuild
         run: npx expo prebuild --platform android --clean --no-install
+        env:
+          # Forțăm Kotlin 1.9.24 la nivel de sistem pentru tot procesul de build
+          EXT_KOTLIN_VERSION: 1.9.24
+
 
       - name: Bundle JavaScript
         run: |
