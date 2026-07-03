@@ -62,24 +62,14 @@ jobs:
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          if [ -z "$SIGNING_KEY" ]; then
-            echo "have_release_key=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "✅ SIGNING_KEY found — decoding"
-            # Decodare curată
+          if [ -n "$SIGNING_KEY" ]; then
+            # Decodăm direct în folderul unde Gradle se așteaptă să fie
             printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 -d > android/app/release.keystore
-            
-            # Verificăm DOAR dacă parola de keystore e bună (fără testul de keypasswd care crapă)
-            if ! keytool -list -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
-              echo "❌ Parola KEYSTORE_PASSWORD este greșită în GitHub Secrets!"
-              exit 1
-            fi
-            
-            echo "✅ Keystore pregătit pentru Gradle"
-            echo "effective_keypass=store" >> "$GITHUB_OUTPUT"
             echo "have_release_key=true" >> "$GITHUB_OUTPUT"
+            echo "KEYSTORE_PATH=$(pwd)/android/app/release.keystore" >> "$GITHUB_ENV"
+          else
+            echo "have_release_key=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build Gradle
@@ -88,7 +78,7 @@ jobs:
           chmod +x gradlew
           if [ "${{ steps.keystore.outputs.have_release_key }}" = "true" ]; then
             ./gradlew clean assembleRelease bundleRelease \
-              -Pandroid.injected.signing.store.file=release.keystore \
+              -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
               -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
               -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
               -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD || secrets.KEYSTORE_PASSWORD }}" \
