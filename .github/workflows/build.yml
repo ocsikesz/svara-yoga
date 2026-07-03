@@ -1,6 +1,6 @@
 name: Build Android APK
 on:
-  workflow_dispatch:      # Manual only — click "Run workflow" in the Actions tab.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,267 +13,59 @@ jobs:
         with:
           fetch-depth: 0
 
-      # ── Setup WITHOUT external setup-* actions ───────────────────────────
-      # ubuntu-latest ships with Node 20, Java 17 and the Android SDK already
-      # installed. We point to them directly, avoiding the codeload download
-      # of setup-node / setup-java / setup-android that was failing.
-      - name: Show pre-installed tool versions
+      - name: Setup Java and SDK
         run: |
-          echo "Node: $(node -v)"
-          echo "npm:  $(npm -v)"
-          echo "Java: $(java -version 2>&1 | head -1)"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-
-      - name: Ensure Java 17 is selected
-        run: |
-          JAVA17=$(ls -d /usr/lib/jvm/temurin-17* /usr/lib/jvm/*17* 2>/dev/null | head -1)
-          if [ -z "$JAVA17" ]; then
-            sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
-            JAVA17=$(ls -d /usr/lib/jvm/*17* | head -1)
-          fi
-          echo "JAVA_HOME=$JAVA17" >> "$GITHUB_ENV"
-          echo "$JAVA17/bin" >> "$GITHUB_PATH"
-          echo "Selected JAVA_HOME=$JAVA17"
-
-      - name: Ensure Android SDK 35 is installed
-        run: |
-          SDKMGR=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
-          if [ -z "$SDKMGR" ]; then
-            SDKMGR=$(which sdkmanager || true)
-          fi
-          if [ -z "$SDKMGR" ]; then
-            echo "⚠️ sdkmanager not found — relying on pre-installed SDK"
-          else
-            echo "Using sdkmanager: $SDKMGR"
-            yes | "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null 2>&1 || true
-            echo "✅ Ensured platforms;android-35 and build-tools;35.0.0"
-          fi
-          echo "Installed platforms:"; ls "$ANDROID_HOME"/platforms 2>/dev/null || true
+          sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
+          SDKMGR=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)
+          yes | "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" >/dev/null
 
       - name: Compute version
         id: version
         run: |
-          BASE=$(node -p "require('./app.json').expo.version")
-          MAJOR=$(echo "$BASE" | cut -d. -f1)
-          # versionCode base = commit count + 200 offset. The offset skips
-          # past all versionCodes ever used in Play Store (108, 111, 116, 218,
-          # 220, 228, 230…) so no upload conflicts. With commit count 105 on
-          # v1.105, this makes versionCode 305 — safely above every previous.
-          BUILD=$(( $(git rev-list --count HEAD) + 200 ))
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          FULL="${MAJOR}.${BUILD}"
-          echo "base=${BASE}"          >> "$GITHUB_OUTPUT"
-          echo "major=${MAJOR}"        >> "$GITHUB_OUTPUT"
-          echo "build=${BUILD}"        >> "$GITHUB_OUTPUT"
-          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "full=${FULL}"          >> "$GITHUB_OUTPUT"
-          echo "apk_name=svara-yoga-v${FULL}.apk" >> "$GITHUB_OUTPUT"
-          echo "aab_name=svara-yoga-v${FULL}.aab" >> "$GITHUB_OUTPUT"
-          echo "Building Svara Yoga v${FULL} (commit ${SHORT_SHA})"
+          VERSION_BASE=$(node -p "require('./app.json').expo.version")
+          BUILD_NUMBER=$(( $(git rev-list --count HEAD) + 200 ))
+          VERSION_NAME="${VERSION_BASE}-b${BUILD_NUMBER}"
+          echo "full=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "apk_name=svara-yoga-v${VERSION_NAME}.apk" >> "$GITHUB_OUTPUT"
+          echo "aab_name=svara-yoga-v${VERSION_NAME}.aab" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: npm install
 
-      - name: Patch expo-modules-core for SDK 35 Kotlin compile (SDK 50 only)
-        run: |
-          # NOTE: This patch is only needed on Expo SDK 50, where PermissionsService.kt
-          # accesses PackageInfo.requestedPermissions directly (it became nullable in
-          # Android SDK 35). Expo SDK 51+ has this fixed upstream.
-          # The patch is guarded so it's a no-op on SDK 51+ (the line won't match).
-          F=node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/permissions/PermissionsService.kt
-          if [ -f "$F" ] && grep -q "return requestedPermissions\.contains(permission)" "$F"; then
-            echo "SDK 50 detected — applying patch"
-            sed -i 's/return requestedPermissions\.contains(permission)/return requestedPermissions?.contains(permission) ?: false/' "$F"
-            echo "✅ Patched"
-          else
-            echo "✅ No patch needed (SDK 51+ or file structure changed)"
-          fi
-
-      - name: Prebuild Android
+      - name: Prebuild
         run: npx expo prebuild --platform android --clean --no-install
-        env:
-          CI: 1
 
-      - name: Set versionCode and versionName
+      - name: Fix Sonatype and Build
         run: |
-          GRADLE=android/app/build.gradle
-          # versionCode = build number (commit count) → always increasing & unique
-          VCODE=${{ steps.version.outputs.build }}
-          VNAME="${{ steps.version.outputs.full }}"
-          sed -i -E "s/versionCode [0-9]+/versionCode ${VCODE}/" "$GRADLE"
-          sed -i -E "s/versionName \"[^\"]*\"/versionName \"${VNAME}\"/" "$GRADLE"
-          echo "Set versionCode=${VCODE}, versionName=${VNAME}"
-          grep -E "versionCode|versionName" "$GRADLE" | head -3
-
-      - name: Bundle JavaScript into Android assets
-        run: |
-          mkdir -p android/app/src/main/assets
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res
-
-      - name: Decode keystore from secret
-        id: keystore
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        run: |
-          if [ -z "$SIGNING_KEY" ]; then
-            echo "have_release_key=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "✅ SIGNING_KEY found — decoding"
-            # Decodare curată
-            printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 -d > android/app/release.keystore
-            
-            # Verificăm DOAR dacă parola de keystore e bună (fără testul de keypasswd care crapă)
-            if ! keytool -list -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
-              echo "❌ Parola KEYSTORE_PASSWORD este greșită în GitHub Secrets!"
-              exit 1
-            fi
-            
-            echo "✅ Keystore pregătit pentru Gradle"
-            echo "effective_keypass=store" >> "$GITHUB_OUTPUT"
-            echo "have_release_key=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Configure signing in build.gradle
-        env:
-          HAVE_KEY: ${{ steps.keystore.outputs.have_release_key }}
-          EFFECTIVE: ${{ steps.keystore.outputs.effective_keypass }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_PASSWORD:      ${{ secrets.KEY_PASSWORD }}
-          KEY_ALIAS:         ${{ secrets.KEY_ALIAS }}
-        run: |
-          if [ "$HAVE_KEY" = "true" ]; then
-            # Use whichever password actually unlocks the key
-            if [ "$EFFECTIVE" = "store" ]; then
-              USE_KEYPASS="$KEYSTORE_PASSWORD"
-            else
-              USE_KEYPASS="$KEY_PASSWORD"
-            fi
-            cat >> android/app/build.gradle << EOF
-
-          android {
-              signingConfigs {
-                  release {
-                      storeFile file('release.keystore')
-                      storePassword "$KEYSTORE_PASSWORD"
-                      keyAlias "$KEY_ALIAS"
-                      keyPassword "$USE_KEYPASS"
-                  }
-              }
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.release
-                  }
-              }
-          }
-          EOF
-            echo "✅ build.gradle configured with RELEASE signing (key password: $EFFECTIVE)"
-          else
-            cat >> android/app/build.gradle << 'EOF'
-
-          android {
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                  }
-              }
-          }
-          EOF
-            echo "ℹ️  build.gradle configured with DEBUG signing (no SIGNING_KEY)"
-          fi
-
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
-
-      - name: Verify patch was applied (debug)
-        run: |
-          F=node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/permissions/PermissionsService.kt
-          echo "=== PermissionsService.kt line 166 area ==="
-          sed -n '164,168p' "$F" 2>/dev/null || echo "file not found"
-          echo "=== Any remaining non-null requestedPermissions access? ==="
-          grep -rn "requestedPermissions" node_modules/expo-modules-core/android/src 2>/dev/null | grep -v "requestedPermissions?" || echo "none (all safe)"
-
-      - name: Force 16 KB memory page alignment for all native libs
-        # Google Play blocks Production updates for apps whose native .so
-        # libraries aren't aligned to 16 KB page boundaries.
-        # Actual implementation lives in .github/scripts/inject-16kb.py to
-        # keep the multi-line Groovy block out of this YAML (multi-line
-        # strings at column 0 break the YAML block-scalar indent rule).
-        run: python3 .github/scripts/inject-16kb.py
-
-      - name: Build Release APK + AAB
-        shell: bash
-        run: |
-          # pipefail so tee doesn't hide gradlew's exit code
-          set -o pipefail
-          cd android && ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/build.log
+          # Curățare agresivă
+          find android -name "build.gradle" -type f -exec sed -i '/sonatype/d' {} +
+          cd android
+          chmod +x gradlew
+          ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
-      - name: Show Gradle log tail (always)
-        if: always()
-        run: |
-          echo "=== last 100 lines of gradle build log ==="
-          tail -100 /tmp/build.log 2>/dev/null || echo "(no gradle log)"
-          echo ""
-          echo "=== FAILURE / BUILD FAILED / What went wrong / Task FAILED markers ==="
-          grep -nE "FAILURE|BUILD FAILED|What went wrong|Execution failed|Task .* FAILED" /tmp/build.log 2>/dev/null | head -30 || echo "(no failure markers)"
-
-      - name: Show Kotlin errors if build failed
-        if: failure()
-        run: |
-          echo "=== All Kotlin compile errors ==="
-          grep -E "\.kt:[0-9]+|error:|e: " /tmp/build.log | head -50 || echo "no kt errors captured"
-
-      - name: Collect APK & AAB with version names
-        id: rename
+      - name: Debug and Collect Artifacts
         run: |
           mkdir -p dist
-          APK_SRC=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
-          cp "$APK_SRC" "dist/${{ steps.version.outputs.apk_name }}"
-          AAB_SRC=$(ls android/app/build/outputs/bundle/release/*.aab | head -1)
-          cp "$AAB_SRC" "dist/${{ steps.version.outputs.aab_name }}"
-          ls -lh dist/
-          echo "apk_path=dist/${{ steps.version.outputs.apk_name }}" >> "$GITHUB_OUTPUT"
-          echo "aab_path=dist/${{ steps.version.outputs.aab_name }}" >> "$GITHUB_OUTPUT"
+          echo "--- Structura outputs ---"
+          find android/app/build/outputs -name "*.apk" -o -name "*.aab"
+          
+          # Căutăm fișierele oriunde s-au generat
+          APK=$(find android/app/build/outputs -name "*.apk" | head -1)
+          AAB=$(find android/app/build/outputs -name "*.aab" | head -1)
+          
+          if [ -z "$APK" ] || [ -z "$AAB" ]; then
+            echo "❌ BUILD FAILED: Fișierele release nu au fost generate."
+            exit 1
+          fi
+          
+          cp "$APK" "dist/${{ steps.version.outputs.apk_name }}"
+          cp "$AAB" "dist/${{ steps.version.outputs.aab_name }}"
 
-      - name: Upload artifacts (APK + AAB)
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: svara-yoga-v${{ steps.version.outputs.full }}
-          path: |
-            dist/${{ steps.version.outputs.apk_name }}
-            dist/${{ steps.version.outputs.aab_name }}
-          retention-days: 90
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.full }}
-          name: Svara Yoga v${{ steps.version.outputs.full }}
-          body: |
-            Svara Yoga v${{ steps.version.outputs.full }}
-
-            - Base version: ${{ steps.version.outputs.base }}
-            - Build number: ${{ steps.version.outputs.build }}
-            - Commit: ${{ steps.version.outputs.short_sha }}
-            - Signing: ${{ steps.keystore.outputs.have_release_key == 'true' && 'RELEASE (Play-ready)' || 'DEBUG (sideload only)' }}
-
-            **For your phone (sideload):** download the `.apk`, uninstall any
-            older version, then install.
-
-            **For Google Play:** upload the `.aab` in the Play Console.
-          files: |
-            dist/${{ steps.version.outputs.apk_name }}
-            dist/${{ steps.version.outputs.aab_name }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: svara-yoga-release
+          path: dist/
