@@ -483,14 +483,22 @@ function InnerApp() {
                 data:  { kind:'svara-tx' },
                 ...androidFields,
               },
-              // CRITICAL: repeats: false. In expo-notifications 0.29 (SDK 52)
-              // a bare { seconds: N } trigger REPEATS by default at the same
-              // interval, so a notification scheduled for 60 seconds from now
-              // would keep firing every 60 seconds forever. In SDK 51 the
-              // default was non-repeating, so this bug is invisible until
-              // upgrading. Explicit repeats: false restores the intended
+              // CRITICAL for SDK 52: type must be explicit. expo-notifications
+              // 0.29 (bundled with SDK 52) tightened trigger parsing —
+              // a bare { seconds: N } without a 'type' field is ambiguous and
+              // no longer reliably interpreted as a one-shot time-interval
+              // trigger. Result on SDK 52: notifications either fire
+              // immediately or repeat, which is why the user saw the 49-item
+              // burst and phone vibrating every ~10s.
+              // SDK 51 (expo-notifications 0.28) accepted the bare shape, so
+              // v1.105 works — but we're on SDK 52 now.
+              // Explicit 'timeInterval' + repeats:false gives the correct
               // one-shot behaviour on both SDKs.
-              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)), repeats: false },
+              trigger: {
+                type: 'timeInterval',
+                seconds: Math.max(1, Math.round(tx.dm*60)),
+                repeats: false,
+              },
             });
           } else {
             const ni = NADI_INFO[tx.toId];
@@ -503,7 +511,11 @@ function InnerApp() {
                 data:  { kind:'svara-tx' },
                 ...androidFields,
               },
-              trigger: { seconds: Math.max(1, Math.round(tx.dm*60)), repeats: false },
+              trigger: {
+                type: 'timeInterval',
+                seconds: Math.max(1, Math.round(tx.dm*60)),
+                repeats: false,
+              },
             });
           }
         }
