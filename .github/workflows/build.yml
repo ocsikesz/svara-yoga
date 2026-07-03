@@ -200,6 +200,64 @@ jobs:
           echo "=== Any remaining non-null requestedPermissions access? ==="
           grep -rn "requestedPermissions" node_modules/expo-modules-core/android/src 2>/dev/null | grep -v "requestedPermissions?" || echo "none (all safe)"
 
+      - name: Force 16 KB memory page alignment for all native libs
+        # Google Play blocks Production updates for apps whose native .so
+        # libraries aren't aligned to 16 KB page boundaries. RN 0.76 aligns
+        # its OWN libs but does NOT force third-party modules (react-native-iap,
+        # some expo-* modules) to do the same. Result: the AAB still contains
+        # some 4 KB-aligned libs and Play rejects it.
+        #
+        # Fix: append a subprojects{} block to android/build.gradle that turns
+        # OFF useLegacyPackaging for jniLibs across EVERY subproject. Modern
+        # packaging aligns .so files to the 16 KB page size that Android 15+
+        # requires. Also set to the app module directly for good measure.
+        run: |
+          BUILD_GRADLE=android/build.gradle
+          APP_GRADLE=android/app/build.gradle
+
+          echo "=== Appending 16 KB alignment block to $BUILD_GRADLE ==="
+          cat >> "$BUILD_GRADLE" << 'GRADLE_EOF'
+
+          // ────────────────────────────────────────────────────────────────
+          // 16 KB memory page alignment for Android 15+ compliance.
+          // Applied to every subproject that has an Android module, so
+          // third-party libs (react-native-iap, expo-*, etc.) get the modern
+          // packaging that aligns .so files to 16 KB, not the legacy 4 KB.
+          // Without this Play Store blocks Production updates.
+          // ────────────────────────────────────────────────────────────────
+          subprojects { subproject ->
+              subproject.afterEvaluate {
+                  if (subproject.hasProperty("android")) {
+                      def androidExt = subproject.android
+                      if (androidExt.packagingOptions?.jniLibs) {
+                          androidExt.packagingOptions.jniLibs.useLegacyPackaging = false
+                      }
+                  }
+              }
+          }
+          GRADLE_EOF
+
+          # Belt + braces: also add explicit packaging block to android/app
+          echo "=== Adding explicit packaging block to $APP_GRADLE ==="
+          # Insert inside the android { ... } block. Simplest: append at end,
+          # then merge via the existing structure — but easier to append a
+          # new top-level android extension that Gradle merges.
+          cat >> "$APP_GRADLE" << 'GRADLE_EOF'
+
+          android {
+              packagingOptions {
+                  jniLibs {
+                      useLegacyPackaging = false
+                  }
+              }
+          }
+          GRADLE_EOF
+
+          echo "=== Verify ==="
+          tail -15 "$BUILD_GRADLE"
+          echo "---"
+          tail -10 "$APP_GRADLE"
+
       - name: Build Release APK + AAB
         run: cd android && ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/build.log
         env:
