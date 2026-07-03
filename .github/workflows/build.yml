@@ -202,35 +202,11 @@ jobs:
 
       - name: Force 16 KB memory page alignment for all native libs
         # Google Play blocks Production updates for apps whose native .so
-        # libraries aren't aligned to 16 KB page boundaries. RN 0.76 aligns
-        # its OWN libs but does NOT force third-party modules (react-native-iap,
-        # some expo-* modules) to do the same. Result: the AAB still contains
-        # some 4 KB-aligned libs and Play rejects it.
-        #
-        # Fix approach (safer than the first attempt): inject a subprojects{}
-        # block at the top of the root android/build.gradle that flips
-        # useLegacyPackaging.jniLibs=false on every Android subproject. That
-        # single change modernises packaging for the entire dependency graph
-        # (react-native-iap, expo-*, RN core), aligning all .so files to 16 KB.
-        #
-        # No modification to app/build.gradle — the previous attempt appended
-        # a second top-level `android { ... }` block which Gradle rejects
-        # (you can only extend an existing block, not redeclare it).
-        run: |
-          BUILD_GRADLE=android/build.gradle
-          if grep -q "useLegacyPackaging" "$BUILD_GRADLE"; then
-            echo "16 KB alignment block already present — skipping (idempotent)"
-          else
-            # Append with tab-only indentation to avoid YAML heredoc whitespace
-            # leaking spaces into the Gradle file. Groovy is whitespace-tolerant
-            # but keeping the block clean makes the log readable.
-            printf '\n// 16 KB memory page alignment for Android 15+ Play Store compliance.\n// Applied to every Android subproject so third-party native libs get the\n// modern packaging that aligns .so files to 16 KB, not the legacy 4 KB.\nsubprojects {\n\tafterEvaluate { proj ->\n\t\tif (proj.hasProperty("android")) {\n\t\t\tproj.android.packagingOptions {\n\t\t\t\tjniLibs {\n\t\t\t\t\tuseLegacyPackaging = false\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n' >> "$BUILD_GRADLE"
-            echo "Appended 16 KB alignment block"
-          fi
-
-          echo ""
-          echo "=== Last 20 lines of $BUILD_GRADLE ==="
-          tail -20 "$BUILD_GRADLE"
+        # libraries aren't aligned to 16 KB page boundaries.
+        # Actual implementation lives in .github/scripts/inject-16kb.py to
+        # keep the multi-line Groovy block out of this YAML (multi-line
+        # strings at column 0 break the YAML block-scalar indent rule).
+        run: python3 .github/scripts/inject-16kb.py
 
       - name: Build Release APK + AAB
         shell: bash
