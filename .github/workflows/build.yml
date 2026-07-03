@@ -88,6 +88,17 @@ jobs:
           fi
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
+          
+      - name: Set versionCode and versionName
+        run: |
+          GRADLE=android/app/build.gradle
+          # versionCode = build number (commit count) → always increasing & unique
+          VCODE=${{ steps.version.outputs.build }}
+          VNAME="${{ steps.version.outputs.full }}"
+          sed -i -E "s/versionCode [0-9]+/versionCode ${VCODE}/" "$GRADLE"
+          sed -i -E "s/versionName \"[^\"]*\"/versionName \"${VNAME}\"/" "$GRADLE"
+          echo "Set versionCode=${VCODE}, versionName=${VNAME}"
+          grep -E "versionCode|versionName" "$GRADLE" | head -3
 
       - name: Collect Artifacts
         run: |
