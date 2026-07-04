@@ -47,21 +47,23 @@
       ],
       "expo-notifications",
       [
-  "expo-build-properties",
-  {
-    "android": {
-      "compileSdkVersion": 35,
-      "targetSdkVersion": 35,
-      "kotlinVersion": "1.9.24" 
-    }
-  }
-],
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "newArchEnabled": false
+          }
+        }
+      ],
       "react-native-iap"
     ],
     "extra": {
       "eas": {
         "projectId": "e1d05aad-f013-4df4-99fb-2e6e3d8ae160"
       }
-    }
+    },
+    "newArchEnabled": false
   }
 }
