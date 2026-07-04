@@ -1,0 +1,45 @@
+// Gradle init script that runs BEFORE any project evaluation.
+//
+// Google Play blocks Production updates for AAB files whose native .so
+// libraries aren't aligned to 16 KB page boundaries (Android 15+
+// requirement). RN 0.76 aligns its own libraries but does not force
+// third-party modules (react-native-iap, several expo-* modules) to do
+// the same, so the AAB fails validation.
+//
+// This init script hooks into every Gradle project via allprojects{}
+// and beforeProject{}, which runs at the earliest possible moment —
+// unlike subprojects{ afterEvaluate{...} } inside build.gradle, which
+// throws 'Cannot run Project.afterEvaluate when the project is already
+// evaluated' because Expo prebuild-generated builds have several
+// subprojects that are already fully evaluated by the time
+// build.gradle is read.
+//
+// Applied via workflow with:
+//   ./gradlew --init-script gradle-16kb.init.gradle assembleRelease bundleRelease
+//
+// Reference:
+//   https://developer.android.com/guide/practices/page-sizes
+//   https://docs.gradle.org/current/userguide/init_scripts.html
+
+allprojects { proj ->
+    proj.plugins.withId("com.android.application") {
+        proj.android {
+            packagingOptions {
+                jniLibs {
+                    useLegacyPackaging = false
+                }
+            }
+        }
+        println "[16KB] Modernised packaging for app: ${proj.name}"
+    }
+    proj.plugins.withId("com.android.library") {
+        proj.android {
+            packagingOptions {
+                jniLibs {
+                    useLegacyPackaging = false
+                }
+            }
+        }
+        println "[16KB] Modernised packaging for lib: ${proj.name}"
+    }
+}

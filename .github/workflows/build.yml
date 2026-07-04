@@ -94,18 +94,23 @@ jobs:
           grep -E "versionCode|versionName" "$GRADLE" | head -3
 
       - name: Build Gradle
+        # --init-script applies our 16 KB alignment hook to every Android
+        # subproject BEFORE evaluation. See gradle-16kb.init.gradle at repo
+        # root for details. This is what makes Play Store accept the AAB
+        # for Production updates.
         run: |
           cd android
           chmod +x gradlew
+          INIT_SCRIPT="../gradle-16kb.init.gradle"
           if [ "${{ steps.keystore.outputs.have_release_key }}" = "true" ]; then
-            ./gradlew clean assembleRelease bundleRelease \
+            ./gradlew --init-script "$INIT_SCRIPT" clean assembleRelease bundleRelease \
               -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
               -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
               -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
               -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD || secrets.KEYSTORE_PASSWORD }}" \
               --no-daemon --stacktrace
           else
-            ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace
+            ./gradlew --init-script "$INIT_SCRIPT" clean assembleRelease bundleRelease --no-daemon --stacktrace
           fi
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
