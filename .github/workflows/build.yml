@@ -26,6 +26,7 @@ jobs:
           VERSION_BASE=$(node -p "require('./app.json').expo.version")
           BUILD_NUMBER=$(( $(git rev-list --count HEAD) + 200 ))
           VERSION_NAME="${VERSION_BASE}-b${BUILD_NUMBER}"
+          echo "build=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "full=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
           echo "apk_name=svara-yoga-v${VERSION_NAME}.apk" >> "$GITHUB_OUTPUT"
           echo "aab_name=svara-yoga-v${VERSION_NAME}.aab" >> "$GITHUB_OUTPUT"
@@ -72,6 +73,26 @@ jobs:
             echo "have_release_key=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Set versionCode and versionName in build.gradle
+        # Must run BEFORE 'Build Gradle' — otherwise Gradle reads the values
+        # from app.json (versionCode=106) and the AAB gets shipped with the
+        # wrong number, which Play Store then rejects as already-used.
+        # We overwrite the versionCode + versionName lines that
+        # expo prebuild wrote, using the computed BUILD_NUMBER
+        # (git commit count + 200 offset — safely past every used code).
+        run: |
+          GRADLE=android/app/build.gradle
+          VCODE="${{ steps.version.outputs.build }}"
+          VNAME="${{ steps.version.outputs.full }}"
+          if [ -z "$VCODE" ]; then
+            echo "ERROR: version.outputs.build is empty — check the 'Compute version' step"
+            exit 1
+          fi
+          sed -i -E "s/versionCode [0-9]+/versionCode ${VCODE}/" "$GRADLE"
+          sed -i -E "s/versionName \"[^\"]*\"/versionName \"${VNAME}\"/" "$GRADLE"
+          echo "Set versionCode=${VCODE}, versionName=${VNAME}"
+          grep -E "versionCode|versionName" "$GRADLE" | head -3
+
       - name: Build Gradle
         run: |
           cd android
@@ -88,17 +109,6 @@ jobs:
           fi
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
-          
-      - name: Set versionCode and versionName
-        run: |
-          GRADLE=android/app/build.gradle
-          # versionCode = build number (commit count) → always increasing & unique
-          VCODE=${{ steps.version.outputs.build }}
-          VNAME="${{ steps.version.outputs.full }}"
-          sed -i -E "s/versionCode [0-9]+/versionCode ${VCODE}/" "$GRADLE"
-          sed -i -E "s/versionName \"[^\"]*\"/versionName \"${VNAME}\"/" "$GRADLE"
-          echo "Set versionCode=${VCODE}, versionName=${VNAME}"
-          grep -E "versionCode|versionName" "$GRADLE" | head -3
 
       - name: Collect Artifacts
         run: |
@@ -114,3 +124,32 @@ jobs:
         with:
           name: svara-yoga-release
           path: dist/
+          retention-days: 30
+
+      - name: Create GitHub Release
+        # Publishes a permanent GitHub Release with the AAB and APK
+        # attached, visible at github.com/OWNER/REPO/releases.
+        # Only runs on successful builds. Tag name is the computed version
+        # (e.g. v2.0-b323), unique per commit thanks to git-count offset.
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.full }}
+          name: Svara Yoga v${{ steps.version.outputs.full }}
+          body: |
+            Automated build from `${{ github.ref_name }}` branch.
+
+            **Build info**
+            - versionCode: `${{ steps.version.outputs.build }}`
+            - versionName: `${{ steps.version.outputs.full }}`
+            - Commit: `${{ github.sha }}`
+
+            **Downloads**
+            - `.aab` — upload to Play Console
+            - `.apk` — install directly on a device for sideloading
+          files: |
+            dist/${{ steps.version.outputs.apk_name }}
+            dist/${{ steps.version.outputs.aab_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
