@@ -4,7 +4,16 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
-import * as RNIap from 'react-native-iap';
+import {
+  initConnection,
+  endConnection,
+  fetchProducts,
+  requestPurchase,
+  finishTransaction,
+  getAvailablePurchases,
+  purchaseUpdatedListener,
+  purchaseErrorListener,
+} from 'react-native-iap';
 import { C, s } from './src/constants/theme';
 import { PREMIUM_SKU, TABS, TATTVAS_CLASSIC, TATTVAS_GHATIKA, LUNAR_DAYS, DEFAULT_LAT, DEFAULT_LNG } from './src/constants/data';
 import { calcSunrise, getLunarDay } from './src/utils/timeMath';
@@ -108,8 +117,9 @@ function InnerApp() {
 
   const restorePremium = async (showAlert) => {
     try {
-      const purchases = await RNIap.getAvailablePurchases();
-      const owned = purchases.some(p => p.productId === PREMIUM_SKU);
+      // IAP 15.x: getAvailablePurchases returns Purchase[] with productId (both platforms).
+      const purchases = await getAvailablePurchases();
+      const owned = (purchases || []).some(p => p.productId === PREMIUM_SKU);
       if (owned) {
         await AsyncStorage.setItem('svaraPremium', 'true');
         setIsPremium(true);
@@ -132,7 +142,16 @@ function InnerApp() {
     }
     setIapBusy(true);
     try {
-      await RNIap.requestPurchase({ skus: [PREMIUM_SKU] });
+      // IAP 15.x API — nested request object per platform. We ship Android
+      // only, but we include the apple wrapper so the same call would work
+      // on iOS in a hypothetical future without further refactor.
+      await requestPurchase({
+        request: {
+          android: { skus: [PREMIUM_SKU] },
+          ios: { sku: PREMIUM_SKU },
+        },
+        type: 'in-app',
+      });
       // The actual unlock happens in purchaseUpdatedListener below.
     } catch (e) {
       const code = e?.code || '';
@@ -155,31 +174,36 @@ function InnerApp() {
     let cancelled = false;
     (async () => {
       try {
-        await RNIap.initConnection();
+        // IAP 15.x: same initConnection() as 12.x
+        await initConnection();
         if (cancelled) return;
         iapReadyRef.current = true;
         // Best-effort: fetch the product to get the localized price string.
+        // IAP 15.x renamed getProducts → fetchProducts and requires an explicit
+        // 'type: in-app' argument. localizedPrice → displayPrice.
         try {
-          const products = await RNIap.getProducts({ skus: [PREMIUM_SKU] });
-          const p = products && products[0];
-          if (p && p.localizedPrice) setIapPrice(p.localizedPrice);
+          const products = await fetchProducts({ skus: [PREMIUM_SKU], type: 'in-app' });
+          const p = Array.isArray(products) ? products[0] : null;
+          if (p && (p.displayPrice || p.localizedPrice)) {
+            setIapPrice(p.displayPrice || p.localizedPrice);
+          }
         } catch (e) {}
         // Silent restore so users who reinstall or clear data don't have to
         // press a button to get their premium back.
         await restorePremium(false);
-        // Listen for future purchases.
-        purchaseUpdateSub = RNIap.purchaseUpdatedListener(async (purchase) => {
+        // Listen for future purchases. Signature is same as 12.x.
+        purchaseUpdateSub = purchaseUpdatedListener(async (purchase) => {
           try {
             if (purchase?.productId !== PREMIUM_SKU) return;
             // Android: purchaseStateAndroid 1 = purchased, 2 = pending, 0 = unspecified.
             // Acknowledge regardless; finishTransaction is idempotent.
-            await RNIap.finishTransaction({ purchase, isConsumable: false });
+            await finishTransaction({ purchase, isConsumable: false });
             await AsyncStorage.setItem('svaraPremium', 'true');
             setIsPremium(true);
             Alert.alert('Thank you 🙏', 'Premium is now unlocked. Enjoy the full Svara Yoga experience.');
           } catch (e) {}
         });
-        purchaseErrorSub = RNIap.purchaseErrorListener((err) => {
+        purchaseErrorSub = purchaseErrorListener((err) => {
           // Errors from requestPurchase() are also caught above in requestPremium's
           // try/catch — this listener catches errors that bubble up out-of-band.
           if (err?.code === 'E_USER_CANCELLED' || err?.code === 'E_USER_CANCELED') return;
@@ -195,7 +219,7 @@ function InnerApp() {
       cancelled = true;
       try { purchaseUpdateSub?.remove(); } catch (e) {}
       try { purchaseErrorSub?.remove(); } catch (e) {}
-      try { RNIap.endConnection(); } catch (e) {}
+      try { endConnection(); } catch (e) {}
     };
   }, []);
 
