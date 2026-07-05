@@ -324,8 +324,16 @@ function InnerApp() {
         const { status, canAskAgain } = await Notifications.getPermissionsAsync();
         let finalStatus = status;
         if (status !== 'granted' && canAskAgain) {
+          // expo-notifications 0.32 (SDK 54) tightened the request shape:
+          // NotificationPermissionsRequest only accepts an 'ios' key now.
+          // Passing 'android: {}' (which was harmless on 0.29) crashes
+          // natively on 0.32 because the type is no longer part of the
+          // schema and the native call errors out mid-dialog — that's what
+          // was closing the app when the permission dialog appeared.
+          // On Android, all permissions are granted by default from the
+          // manifest declaration; the runtime dialog just confirms, and
+          // needs no per-platform arguments.
           const result = await Notifications.requestPermissionsAsync({
-            android: {},
             ios: { allowAlert:true, allowSound:true, allowBadge:false },
           });
           finalStatus = result.status;
