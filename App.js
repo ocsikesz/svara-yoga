@@ -268,9 +268,12 @@ function InnerApp() {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            // Use High accuracy to get accurate latitude, longitude, AND altitude
+            // altitude (in meters) affects sunrise/sunset by ~0.3 min per 100m
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
             const latN = loc.coords.latitude;
             const lngN = loc.coords.longitude;
+            const altN = loc.coords.altitude || 0;  // Fallback to sea level if unavailable
             let cityName = 'Current Location';
             try {
               const geo = await Location.reverseGeocodeAsync({ latitude: latN, longitude: lngN });
@@ -282,7 +285,8 @@ function InnerApp() {
               const next = { ...prev, city: cityName, lat: latN, lng: lngN, locationMode: 'auto' };
               // Only update sunrise/sunset if user wants auto-calculated times
               if (srMode === 'auto') {
-                const calc = calcSunrise(latN, lngN);
+                // Pass altitude so suncalc can account for elevation
+                const calc = calcSunrise(latN, lngN, altN);
                 next.sunriseMin = calc.sunriseMin;
                 next.sunsetMin  = calc.sunsetMin;
                 next.sunriseStr = calc.sunriseStr;
