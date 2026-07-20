@@ -5,8 +5,10 @@ import { TATTVAS_CLASSIC, TATTVAS_GHATIKA, LUNAR_DAYS } from '../constants/data'
 // All timing math (sunrise, svara, tattvas, nadi transitions) lives here.
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
-function calcSunrise(lat, lng, date = new Date()) {
-  const times = SunCalc.getTimes(date, lat, lng);
+function calcSunrise(lat, lng, altitude = 0, date = new Date()) {
+  // altitude in meters — affects sunrise/sunset time by ~0.3 min per 100m
+  // suncalc.getTimes(date, lat, lng, elevation) was added in v1.9.0
+  const times = SunCalc.getTimes(date, lat, lng, altitude);
   // Convert a Date to minutes-since-midnight (with fractional seconds for accurate
   // tattva/nadi computations — we want full precision internally).
   const toLocalMin = d => {
