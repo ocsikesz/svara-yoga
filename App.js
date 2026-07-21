@@ -274,6 +274,7 @@ function InnerApp() {
             const latN = loc.coords.latitude;
             const lngN = loc.coords.longitude;
             const altN = loc.coords.altitude || 0;  // Fallback to sea level if unavailable
+            console.log(`[GPS] Lat: ${latN}, Lon: ${lngN}, Alt: ${altN}m`);  // DEBUG
             let cityName = 'Current Location';
             try {
               const geo = await Location.reverseGeocodeAsync({ latitude: latN, longitude: lngN });
@@ -287,6 +288,7 @@ function InnerApp() {
               if (srMode === 'auto') {
                 // Pass altitude so suncalc can account for elevation
                 const calc = calcSunrise(latN, lngN, altN);
+                console.log(`[Sunrise] Str: ${calc.sunriseStr}, Min: ${calc.sunriseMin}, Alt used: ${altN}m`);  // DEBUG
                 next.sunriseMin = calc.sunriseMin;
                 next.sunsetMin  = calc.sunsetMin;
                 next.sunriseStr = calc.sunriseStr;
