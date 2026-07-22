@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Switch, Alert, Platform, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Switch, Alert, Platform, Image, Modal, FlatList } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
 import { C, s, ss } from '../constants/theme';
 import { TATTVAS_CLASSIC, TATTVAS_GHATIKA, TATTVA_IMG, NADI_IMG } from '../constants/data';
 import { calcSunrise } from '../utils/timeMath';
+import { ROMANIAN_CITIES } from '../constants/cities';
 import AppHeader from '../components/AppHeader';
 
 export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika, isPremium, iapPrice, iapBusy, requestPremium, restorePremium }) {
@@ -19,6 +20,8 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
   const [ssH,     setSsH]     = useState(String(config.ssH).padStart(2,'0'));
   const [ssM,     setSsM]     = useState(String(config.ssM).padStart(2,'0'));
   const [useManualTime, setUseManualTime] = useState(config.sunriseMode === 'manual');
+  const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  const [citySearch,     setCitySearch]    = useState('');
   // Notifications: support per-nadi/per-tattva granularity.
   // Legacy users have notifs.nadi/tattva as booleans → normalize to per-id maps.
   const normalizeNotifs = (n) => ({
@@ -192,7 +195,16 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
               <>
                 <View style={ss.manualRow}>
                   <Text style={ss.manualLabel}>City</Text>
-                  <TextInput style={ss.input} value={city} onChangeText={setCity} placeholderTextColor={C.faint}/>
+                  <TouchableOpacity
+                    style={[ss.input, {flexDirection:'row', alignItems:'center', justifyContent:'space-between'}]}
+                    activeOpacity={0.7}
+                    onPress={() => { setCitySearch(''); setCityPickerOpen(true); }}
+                  >
+                    <Text style={{color: city ? C.text : C.faint, flex:1}} numberOfLines={1}>
+                      {city || 'Select city...'}
+                    </Text>
+                    <Text style={{color: C.faint, fontSize:14, marginLeft:8}}>▼</Text>
+                  </TouchableOpacity>
                 </View>
                 <View style={ss.manualRow}>
                   <Text style={ss.manualLabel}>Latitude</Text>
@@ -402,6 +414,71 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
           <Text style={{color:C.muted,fontSize:14}}>🔔  Send Test Notification</Text>
         </TouchableOpacity>
       </View>
+
+      {/* City Picker Modal — dropdown with all Romanian county capitals */}
+      <Modal
+        visible={cityPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCityPickerOpen(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'center', padding:20}}
+          onPress={() => setCityPickerOpen(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{backgroundColor:C.card, borderRadius:12, padding:16, maxHeight:'80%'}}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={{color:C.text, fontSize:16, fontWeight:'600', marginBottom:12, textAlign:'center'}}>
+              Select City
+            </Text>
+            <TextInput
+              style={[ss.input, {marginBottom:12}]}
+              value={citySearch}
+              onChangeText={setCitySearch}
+              placeholder="Search..."
+              placeholderTextColor={C.faint}
+              autoFocus
+            />
+            <FlatList
+              data={ROMANIAN_CITIES.filter(c =>
+                c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
+                c.county.toLowerCase().includes(citySearch.toLowerCase())
+              )}
+              keyExtractor={(item) => item.name}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({item}) => (
+                <TouchableOpacity
+                  style={{paddingVertical:12, paddingHorizontal:8, borderBottomWidth:1, borderBottomColor:C.border}}
+                  onPress={() => {
+                    setCity(item.name);
+                    setLat(String(item.lat));
+                    setLng(String(item.lng));
+                    setCityPickerOpen(false);
+                  }}
+                >
+                  <Text style={{color:C.text, fontSize:15}}>{item.name}</Text>
+                  <Text style={{color:C.faint, fontSize:12, marginTop:2}}>
+                    {item.county} · {item.lat.toFixed(2)}°N, {item.lng.toFixed(2)}°E · {item.alt}m
+                  </Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <Text style={{color:C.faint, textAlign:'center', padding:20}}>No cities found</Text>
+              }
+            />
+            <TouchableOpacity
+              onPress={() => setCityPickerOpen(false)}
+              style={{marginTop:12, paddingVertical:10, alignItems:'center', backgroundColor:C.border, borderRadius:8}}
+            >
+              <Text style={{color:C.text, fontSize:14}}>Cancel</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
