@@ -273,8 +273,15 @@ function InnerApp() {
             const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
             const latN = loc.coords.latitude;
             const lngN = loc.coords.longitude;
-            const altN = loc.coords.altitude || 0;  // Fallback to sea level if unavailable
-            console.log(`[GPS] Lat: ${latN}, Lon: ${lngN}, Alt: ${altN}m`);  // DEBUG
+            // Sanitize altitude: SunCalc returns Invalid Date for negative values,
+            // and huge positive values (bad GPS fix) skew the calculation badly.
+            // Clamp to reasonable range [0, 5000m] which covers ~99.9% of inhabited
+            // locations (Everest base camp is 5364m).
+            const rawAlt = loc.coords.altitude;
+            const altN = (typeof rawAlt === 'number' && !isNaN(rawAlt) && rawAlt > 0 && rawAlt < 5000)
+              ? rawAlt
+              : 0;
+            console.log(`[GPS] Lat: ${latN}, Lon: ${lngN}, Raw alt: ${rawAlt}, Clamped alt: ${altN}m`);
             let cityName = 'Current Location';
             try {
               const geo = await Location.reverseGeocodeAsync({ latitude: latN, longitude: lngN });

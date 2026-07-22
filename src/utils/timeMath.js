@@ -8,7 +8,19 @@ import { TATTVAS_CLASSIC, TATTVAS_GHATIKA, LUNAR_DAYS } from '../constants/data'
 function calcSunrise(lat, lng, altitude = 0, date = new Date()) {
   // altitude in meters — affects sunrise/sunset time by ~0.3 min per 100m
   // suncalc.getTimes(date, lat, lng, elevation) was added in v1.9.0
-  const times = SunCalc.getTimes(date, lat, lng, altitude);
+  //
+  // Defensive input sanitization to prevent Invalid Date results:
+  //   - lat must be a number in [-90, 90]
+  //   - lng must be a number in [-180, 180]
+  //   - altitude must be non-negative number (SunCalc returns Invalid Date
+  //     for negative elevation) and not absurdly high
+  const safeLat = (typeof lat === 'number' && !isNaN(lat) && lat >= -90 && lat <= 90) ? lat : 0;
+  const safeLng = (typeof lng === 'number' && !isNaN(lng) && lng >= -180 && lng <= 180) ? lng : 0;
+  const safeAlt = (typeof altitude === 'number' && !isNaN(altitude) && altitude >= 0 && altitude < 5000) ? altitude : 0;
+  if (safeLat !== lat || safeLng !== lng || safeAlt !== altitude) {
+    console.warn(`[calcSunrise] Sanitized input: lat ${lat}->${safeLat}, lng ${lng}->${safeLng}, alt ${altitude}->${safeAlt}`);
+  }
+  const times = SunCalc.getTimes(date, safeLat, safeLng, safeAlt);
   // Convert a Date to minutes-since-midnight (with fractional seconds for accurate
   // tattva/nadi computations — we want full precision internally).
   const toLocalMin = d => {
