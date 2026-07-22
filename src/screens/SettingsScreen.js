@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Switch, Alert, Platform, Image, Modal, FlatList } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Switch, Alert, Platform, Image, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
 import { C, s, ss } from '../constants/theme';
 import { TATTVAS_CLASSIC, TATTVAS_GHATIKA, TATTVA_IMG, NADI_IMG } from '../constants/data';
 import { calcSunrise } from '../utils/timeMath';
-import { ROMANIAN_CITIES } from '../constants/cities';
+import { PRESET_CITIES } from '../constants/cities';
 import AppHeader from '../components/AppHeader';
 
 export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhatika, isPremium, iapPrice, iapBusy, requestPremium, restorePremium }) {
@@ -22,6 +22,38 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
   const [useManualTime, setUseManualTime] = useState(config.sunriseMode === 'manual');
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [citySearch,     setCitySearch]    = useState('');
+  const [cityHistory,    setCityHistory]   = useState([]);
+
+  // Load city history from AsyncStorage on mount
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('cityHistory');
+        if (raw) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) setCityHistory(arr.slice(0, 5));
+        }
+      } catch (e) {}
+    })();
+  }, []);
+
+  // Save a picked city to history (max 5, most recent first, deduplicated)
+  const saveToHistory = async (city) => {
+    try {
+      const next = [city, ...cityHistory.filter(h => h.name !== city.name)].slice(0, 5);
+      setCityHistory(next);
+      await AsyncStorage.setItem('cityHistory', JSON.stringify(next));
+    } catch (e) {}
+  };
+
+  // When user picks a city (either from history or presets)
+  const pickCity = (item) => {
+    setCity(item.name);
+    setLat(String(item.lat));
+    setLng(String(item.lng));
+    saveToHistory(item);
+    setCityPickerOpen(false);
+  };
   // Notifications: support per-nadi/per-tattva granularity.
   // Legacy users have notifs.nadi/tattva as booleans → normalize to per-id maps.
   const normalizeNotifs = (n) => ({
@@ -106,6 +138,12 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
     setConfig(newConfig);
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
+    // If the user Apply'd with a custom (typed) city name that's not empty,
+    // and we're in manual mode, add it to the history so it's easy to pick
+    // again next time.
+    if (mode === 'manual' && cityName && cityName !== 'Current Location') {
+      saveToHistory({ name: cityName, country: '', lat: latN, lng: lngN, alt: null });
+    }
     // Persist in background (don't await — UI updates immediately)
     (async () => {
       try {
@@ -415,7 +453,7 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
         </TouchableOpacity>
       </View>
 
-      {/* City Picker Modal — dropdown with all Romanian county capitals */}
+      {/* City Picker Modal — history at top, then presets, then manual entry hint */}
       <Modal
         visible={cityPickerOpen}
         transparent
@@ -429,47 +467,88 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
         >
           <TouchableOpacity
             activeOpacity={1}
-            style={{backgroundColor:C.card, borderRadius:12, padding:16, maxHeight:'80%'}}
+            style={{backgroundColor:C.card, borderRadius:12, padding:16, maxHeight:'85%'}}
             onPress={(e) => e.stopPropagation()}
           >
             <Text style={{color:C.text, fontSize:16, fontWeight:'600', marginBottom:12, textAlign:'center'}}>
-              Select City
+              Select Location
             </Text>
             <TextInput
               style={[ss.input, {marginBottom:12}]}
               value={citySearch}
               onChangeText={setCitySearch}
-              placeholder="Search..."
+              placeholder="Search or type your own..."
               placeholderTextColor={C.faint}
-              autoFocus
             />
-            <FlatList
-              data={ROMANIAN_CITIES.filter(c =>
-                c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
-                c.county.toLowerCase().includes(citySearch.toLowerCase())
+            <ScrollView keyboardShouldPersistTaps="handled" style={{maxHeight:400}}>
+              {/* Recent locations section */}
+              {cityHistory.length > 0 && !citySearch && (
+                <View style={{marginBottom:12}}>
+                  <Text style={{color:C.faint, fontSize:12, fontWeight:'600', textTransform:'uppercase', letterSpacing:0.5, marginBottom:4, paddingHorizontal:4}}>
+                    Recent
+                  </Text>
+                  {cityHistory.map((item, idx) => (
+                    <TouchableOpacity
+                      key={`hist-${idx}`}
+                      style={{paddingVertical:10, paddingHorizontal:8, borderBottomWidth:1, borderBottomColor:C.border}}
+                      onPress={() => pickCity(item)}
+                    >
+                      <Text style={{color:C.text, fontSize:15}}>🕐  {item.name}</Text>
+                      <Text style={{color:C.faint, fontSize:12, marginTop:2, marginLeft:22}}>
+                        {item.country ? `${item.country} · ` : ''}{item.lat.toFixed(2)}°, {item.lng.toFixed(2)}°{item.alt != null ? ` · ${item.alt}m` : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               )}
-              keyExtractor={(item) => item.name}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({item}) => (
+
+              {/* Preset cities (filtered by search) */}
+              {(() => {
+                const filtered = PRESET_CITIES.filter(c =>
+                  c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
+                  c.country.toLowerCase().includes(citySearch.toLowerCase())
+                );
+                if (filtered.length === 0) return null;
+                return (
+                  <View>
+                    <Text style={{color:C.faint, fontSize:12, fontWeight:'600', textTransform:'uppercase', letterSpacing:0.5, marginBottom:4, paddingHorizontal:4}}>
+                      Cities
+                    </Text>
+                    {filtered.map((item) => (
+                      <TouchableOpacity
+                        key={item.name}
+                        style={{paddingVertical:10, paddingHorizontal:8, borderBottomWidth:1, borderBottomColor:C.border}}
+                        onPress={() => pickCity(item)}
+                      >
+                        <Text style={{color:C.text, fontSize:15}}>{item.name}</Text>
+                        <Text style={{color:C.faint, fontSize:12, marginTop:2}}>
+                          {item.country} · {item.lat.toFixed(2)}°, {item.lng.toFixed(2)}° · {item.alt}m
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                );
+              })()}
+
+              {/* Use typed name (for custom locations not in the list) */}
+              {citySearch.trim().length > 0 && (
                 <TouchableOpacity
-                  style={{paddingVertical:12, paddingHorizontal:8, borderBottomWidth:1, borderBottomColor:C.border}}
+                  style={{paddingVertical:12, paddingHorizontal:8, marginTop:8, backgroundColor:C.border, borderRadius:8}}
                   onPress={() => {
-                    setCity(item.name);
-                    setLat(String(item.lat));
-                    setLng(String(item.lng));
+                    setCity(citySearch.trim());
                     setCityPickerOpen(false);
+                    setCitySearch('');
+                    // Latitude/longitude left as-is — user can then edit them
+                    // in the lat/lng fields below.
                   }}
                 >
-                  <Text style={{color:C.text, fontSize:15}}>{item.name}</Text>
-                  <Text style={{color:C.faint, fontSize:12, marginTop:2}}>
-                    {item.county} · {item.lat.toFixed(2)}°N, {item.lng.toFixed(2)}°E · {item.alt}m
+                  <Text style={{color:C.text, fontSize:14, textAlign:'center'}}>
+                    ✏️  Use "{citySearch.trim()}" (enter coordinates manually)
                   </Text>
                 </TouchableOpacity>
               )}
-              ListEmptyComponent={
-                <Text style={{color:C.faint, textAlign:'center', padding:20}}>No cities found</Text>
-              }
-            />
+            </ScrollView>
+
             <TouchableOpacity
               onPress={() => setCityPickerOpen(false)}
               style={{marginTop:12, paddingVertical:10, alignItems:'center', backgroundColor:C.border, borderRadius:8}}
