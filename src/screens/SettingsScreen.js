@@ -238,7 +238,7 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
                     activeOpacity={0.7}
                     onPress={() => { setCitySearch(''); setCityPickerOpen(true); }}
                   >
-                    <Text style={{color: city ? C.text : C.faint, flex:1}} numberOfLines={1}>
+                    <Text style={{color: city ? C.goldLight : C.faint, flex:1}} numberOfLines={1}>
                       {city || 'Select city...'}
                     </Text>
                     <Text style={{color: C.faint, fontSize:14, marginLeft:8}}>▼</Text>
@@ -467,10 +467,10 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
         >
           <TouchableOpacity
             activeOpacity={1}
-            style={{backgroundColor:C.card, borderRadius:12, padding:16, maxHeight:'85%'}}
+            style={{backgroundColor:C.bgCard, borderRadius:12, padding:16, maxHeight:'85%'}}
             onPress={(e) => e.stopPropagation()}
           >
-            <Text style={{color:C.text, fontSize:16, fontWeight:'600', marginBottom:12, textAlign:'center'}}>
+            <Text style={{color:C.goldLight, fontSize:16, fontWeight:'600', marginBottom:12, textAlign:'center'}}>
               Select Location
             </Text>
             <TextInput
@@ -493,7 +493,7 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
                       style={{paddingVertical:10, paddingHorizontal:8, borderBottomWidth:1, borderBottomColor:C.border}}
                       onPress={() => pickCity(item)}
                     >
-                      <Text style={{color:C.text, fontSize:15}}>🕐  {item.name}</Text>
+                      <Text style={{color:C.goldLight, fontSize:15}}>🕐  {item.name}</Text>
                       <Text style={{color:C.faint, fontSize:12, marginTop:2, marginLeft:22}}>
                         {item.country ? `${item.country} · ` : ''}{item.lat.toFixed(2)}°, {item.lng.toFixed(2)}°{item.alt != null ? ` · ${item.alt}m` : ''}
                       </Text>
@@ -520,7 +520,7 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
                         style={{paddingVertical:10, paddingHorizontal:8, borderBottomWidth:1, borderBottomColor:C.border}}
                         onPress={() => pickCity(item)}
                       >
-                        <Text style={{color:C.text, fontSize:15}}>{item.name}</Text>
+                        <Text style={{color:C.goldLight, fontSize:15}}>{item.name}</Text>
                         <Text style={{color:C.faint, fontSize:12, marginTop:2}}>
                           {item.country} · {item.lat.toFixed(2)}°, {item.lng.toFixed(2)}° · {item.alt}m
                         </Text>
@@ -542,7 +542,7 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
                     // in the lat/lng fields below.
                   }}
                 >
-                  <Text style={{color:C.text, fontSize:14, textAlign:'center'}}>
+                  <Text style={{color:C.goldLight, fontSize:14, textAlign:'center'}}>
                     ✏️  Use "{citySearch.trim()}" (enter coordinates manually)
                   </Text>
                 </TouchableOpacity>
@@ -553,7 +553,7 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
               onPress={() => setCityPickerOpen(false)}
               style={{marginTop:12, paddingVertical:10, alignItems:'center', backgroundColor:C.border, borderRadius:8}}
             >
-              <Text style={{color:C.text, fontSize:14}}>Cancel</Text>
+              <Text style={{color:C.goldLight, fontSize:14}}>Cancel</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
