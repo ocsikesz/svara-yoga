@@ -72,32 +72,18 @@ export default function HomeScreen({ config, isGhatika, manualSvara, hasFullAcce
 
   return (
     <ScrollView style={{flex:1,backgroundColor:C.bg}}>
-      <AppHeader subtitle={`${lunar.paksha==='shukla'?'🌒 Shukla':'🌘 Krishna'} · ${(LUNAR_DAYS.find(d=>d.day===lunar.day)||{}).name || ('Day '+lunar.day)}`}/>
-
-      <View style={hd.sunBig}>
-        <View style={hd.sunItem}>
-          <View style={hd.sunRow}>
-            <View style={hd.sunTextCol}>
-              <Text style={hd.sunTime}>{sunriseStr}</Text>
-              <Text style={hd.sunLabelBig}>Sunrise</Text>
-            </View>
-            <Image source={require('../../assets/sunrise-icon.png')} style={hd.sunImg} resizeMode="contain"/>
-          </View>
-        </View>
-        <View style={hd.sunDivider}/>
-        <View style={hd.sunItem}>
-          <View style={hd.sunRow}>
-            <View style={hd.sunTextCol}>
-              <Text style={hd.sunTime}>{sunsetStr}</Text>
-              <Text style={hd.sunLabelBig}>Sunset</Text>
-            </View>
-            <Image source={require('../../assets/sunset-icon.png')} style={hd.sunImg} resizeMode="contain"/>
-          </View>
-        </View>
-      </View>
+      <AppHeader
+        subtitle={`${lunar.paksha==='shukla'?'🌒 Shukla':'🌘 Krishna'} · ${(LUNAR_DAYS.find(d=>d.day===lunar.day)||{}).name || ('Day '+lunar.day)}`}
+        city={config.city}
+        sunriseStr={sunriseStr}
+        sunsetStr={sunsetStr}
+      />
 
       <View style={s.svaraCard}>
-        <Text style={s.svaraLabel}>{manualSvara?'Active Now (Manual)':'Active Svara'}</Text>
+        <View style={{position:'absolute', top:10, right:10, backgroundColor:C.gold, paddingHorizontal:8, paddingVertical:3, borderRadius:8}}>
+          <Text style={{fontSize:9, color:C.bgDeep, fontWeight:'700', letterSpacing:1, textTransform:'uppercase'}}>Active Nadi</Text>
+        </View>
+        <Text style={s.svaraLabel}>{manualSvara?'Manual Override':'Sunrise Calculation'}</Text>
         <Image source={NADI_IMG[svara]} style={s.svaraIconImg} resizeMode="contain"/>
         <Text style={s.svaraName}>{sm.name}</Text>
         <View style={s.badge}><Text style={s.badgeText}>{sm.tag}</Text></View>
@@ -135,7 +121,10 @@ export default function HomeScreen({ config, isGhatika, manualSvara, hasFullAcce
         ))}
       </View>
 
-      <View style={[td.card,{borderColor:activeTattva.color}]}>
+      <View style={[td.card,{borderColor:activeTattva.color, position:'relative'}]}>
+        <View style={{position:'absolute', top:10, right:10, backgroundColor:activeTattva.color, paddingHorizontal:8, paddingVertical:3, borderRadius:8, zIndex:1}}>
+          <Text style={{fontSize:9, color:'#fff', fontWeight:'700', letterSpacing:1, textTransform:'uppercase'}}>Active Tattva</Text>
+        </View>
         <View style={td.topRow}>
           <Image source={TATTVA_IMG[activeTattva.id]} style={td.iconImg} resizeMode="contain"/>
           <View style={{flex:1}}>
