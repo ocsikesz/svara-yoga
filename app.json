@@ -54,9 +54,7 @@
             "targetSdkVersion": 36,
             "buildToolsVersion": "36.0.0",
             "newArchEnabled": false,
-            "enableEdgeToEdge": true,
-            "enableProguardInReleaseBuilds": true,
-            "enableShrinkResources": true
+            "enableEdgeToEdge": true
           }
         }
       ],
