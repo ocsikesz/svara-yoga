@@ -358,13 +358,13 @@ function InnerApp() {
           await Notifications.setNotificationChannelAsync('svara-transitions', {
             name: 'Svara Transitions',
             description: 'Notifications when nadi or tattva changes',
-            importance: Notifications.AndroidImportance.HIGH,
+            importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
             lightColor: '#c9a96e',
             sound: 'default',
             enableVibrate: true,
             showBadge: false,
-            bypassDnd: false,
+            bypassDnd: true,
           });
         }
 
@@ -576,7 +576,21 @@ function InnerApp() {
       } finally {
         try {
           const all = await Notifications.getAllScheduledNotificationsAsync();
-          console.log(`[scheduleAll] DONE — ${all.length} notifications now scheduled`);
+          const now = Date.now();
+          // Count tattva vs nadi in next 3 hours to compare with what user sees
+          let nadi3h = 0, tattva3h = 0;
+          for (const n of all) {
+            const trigger = n.trigger;
+            if (!trigger) continue;
+            const secs = trigger.seconds || 0;
+            if (secs > 0 && secs < 3*3600) {
+              const title = n?.content?.title || '';
+              // Nadi titles start with emojis for ida/pingala/sushumna
+              if (title.includes('Ida') || title.includes('Pingala') || title.includes('Sushumna')) nadi3h++;
+              else tattva3h++;
+            }
+          }
+          console.log(`[scheduleAll] DONE — ${all.length} total scheduled, next 3h: ${nadi3h} nadi + ${tattva3h} tattva`);
         } catch(e) {}
         schedulingRef.current = false;
       }
