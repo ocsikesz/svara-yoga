@@ -412,13 +412,20 @@ function InnerApp() {
     const scheduleAll = async () => {
       // Guard: don't touch notification system until permission + channel
       // are both confirmed ready. Prevents races on Android 13+ first install.
-      if (!notifReady) return;
+      if (!notifReady) {
+        console.log('[scheduleAll] SKIPPED: notifReady is false');
+        return;
+      }
       // Concurrency lock — scheduleAll should never run in parallel with
       // itself. Without it, the refill listener firing during a config
       // change could double-queue 500 notifications, with many landing on
       // the same minute (that's how 49 could arrive together).
-      if (schedulingRef.current) return;
+      if (schedulingRef.current) {
+        console.log('[scheduleAll] SKIPPED: already scheduling');
+        return;
+      }
       schedulingRef.current = true;
+      console.log(`[scheduleAll] START — sunriseMin=${config.sunriseMin}, isGhatika=${isGhatika}`);
       try {
         // FULL cleanup — cancel ALL scheduled notifications, not just our
         // svara-tx kind. Critical because:
@@ -565,7 +572,12 @@ function InnerApp() {
           }
         }
       } catch(e) {
+        console.log(`[scheduleAll] ERROR: ${e?.message || e}`);
       } finally {
+        try {
+          const all = await Notifications.getAllScheduledNotificationsAsync();
+          console.log(`[scheduleAll] DONE — ${all.length} notifications now scheduled`);
+        } catch(e) {}
         schedulingRef.current = false;
       }
     };
