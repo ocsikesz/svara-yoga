@@ -97,13 +97,15 @@ export default function HomeScreen({ config, isGhatika, manualSvara, hasFullAcce
       </View>
 
       <View style={s.svaraCard}>
-        <Text style={s.svaraLabel}>{manualSvara?'Active Now (Manual)':'Active Svara'}</Text>
         <Image source={NADI_IMG[svara]} style={s.svaraIconImg} resizeMode="contain"/>
-        <Text style={s.svaraName}>{sm.name}</Text>
-        <View style={s.badge}><Text style={s.badgeText}>{sm.tag}</Text></View>
-        <Text style={s.nextNadiText}>
-          Next: {SVARA_META[nextNadi.nextNadi].name.replace(' Nadi','')} in {formatDuration(nextNadi.minutesUntil)}
-        </Text>
+        <View style={s.svaraTextCol}>
+          <Text style={s.svaraLabel}>{manualSvara?'Active Now (Manual)':'Active Svara'}</Text>
+          <Text style={s.svaraName}>{sm.name}</Text>
+          <View style={s.badge}><Text style={s.badgeText}>{sm.tag}</Text></View>
+          <Text style={s.nextNadiText}>
+            Next: {SVARA_META[nextNadi.nextNadi].name.replace(' Nadi','')} in {formatDuration(nextNadi.minutesUntil)}
+          </Text>
+        </View>
       </View>
 
       {manualSvara && manualSvara !== autoSvara && (
@@ -127,10 +129,12 @@ export default function HomeScreen({ config, isGhatika, manualSvara, hasFullAcce
 
       <View style={s.tattvaRow}>
         {seq.map(t=>(
-          <View key={t.id} style={[s.tattvaPill, activeTattva.id===t.id && s.tattvaPillActive]}>
-            <Image source={TATTVA_IMG[t.id]} style={s.tattvaIconImg} resizeMode="contain"/>
-            <Text style={[s.tattvaName, activeTattva.id===t.id&&{color:C.gold}]}>{t.name}</Text>
-            {activeTattva.id===t.id && <Text style={{fontSize:11,color:C.gold,marginTop:3,fontWeight:'500'}}>{progress.remaining}m</Text>}
+          <View key={t.id} style={s.tattvaPillWrap}>
+            <View style={[s.tattvaPill, activeTattva.id===t.id && s.tattvaPillActive]}>
+              <Image source={TATTVA_IMG[t.id]} style={s.tattvaIconImg} resizeMode="contain"/>
+            </View>
+            <Text style={[s.tattvaName, activeTattva.id===t.id&&{color:C.gold, fontWeight:'500'}]}>{t.name}</Text>
+            {activeTattva.id===t.id && <Text style={{fontSize:10,color:C.gold,fontWeight:'500'}}>{progress.remaining}m</Text>}
           </View>
         ))}
       </View>
@@ -139,14 +143,14 @@ export default function HomeScreen({ config, isGhatika, manualSvara, hasFullAcce
         <View style={td.topRow}>
           <Image source={TATTVA_IMG[activeTattva.id]} style={td.iconImg} resizeMode="contain"/>
           <View style={{flex:1}}>
-            <Text style={td.name}>{activeTattva.name}</Text>
+            <Text style={[td.name,{color:activeTattva.color}]}>{activeTattva.name}</Text>
             <Text style={td.chakra}>{activeTattva.chakra}</Text>
+            <Text style={[td.chakra,{fontStyle:'italic',marginTop:2}]}>{activeTattva.sense}</Text>
           </View>
-          <View style={td.symbolBox}><Text style={[td.symbol,{color:activeTattva.color}]}>{activeTattva.symbol}</Text></View>
         </View>
         <View style={td.divider}/>
         <View style={td.infoRow}>
-          <View style={td.infoItem}><Text style={td.infoLabel}>Sense</Text><Text style={[td.infoVal,{color:activeTattva.color}]}>{activeTattva.sense}</Text></View>
+          <View style={td.infoItem}><Text style={td.infoLabel}>Symbol</Text><Text style={[td.infoVal,{color:activeTattva.color}]}>{activeTattva.symbol}</Text></View>
           <View style={td.infoItem}><Text style={td.infoLabel}>Duration</Text><Text style={[td.infoVal,{color:activeTattva.color}]}>{isGhatika?activeTattva.ghatika:activeTattva.classic} min</Text></View>
           <View style={td.infoItem}><Text style={td.infoLabel}>Remaining</Text><Text style={[td.infoVal,{color:activeTattva.color}]}>{progress.remaining} min</Text></View>
         </View>
