@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert, Platform, Image, AppState } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -238,14 +238,74 @@ function InnerApp() {
     };
   });
 
-  // Load saved config on app start.
-  // Persistence model:
-  //   AsyncStorage 'appConfig' holds the whole saved config object.
-  //   On start: load this and apply it. Then:
-  //   - If locationMode is 'auto', refresh GPS in background (and re-calc sunrise
-  //     ONLY if sunriseMode is also 'auto'; if user has manual time we keep it)
-  //   - If locationMode is 'gps' (gps-once) or 'manual', leave coordinates alone
-  //   - Manual sunrise time always wins over auto-calc, regardless of location mode
+  // Refresh location & sunrise. Extracted so we can call it from BOTH the
+  // initial mount effect AND the AppState / daily-interval effects below,
+  // instead of only running once at app start (that was the bug — user opened
+  // the app in the morning and it was still showing yesterday's sunrise
+  // because the effect had already fired the night before).
+  //
+  // `refreshLocation`: when true, call GPS to get fresh coords (only useful
+  //   when locationMode === 'auto'). When false, just recalc sunrise from
+  //   the coords already in config — cheap, safe to call often.
+  const refreshLocationAndSunrise = React.useCallback(async ({ refreshLocation }) => {
+    try {
+      const raw = await AsyncStorage.getItem('appConfig');
+      const saved = raw ? JSON.parse(raw) : {};
+      const mode = saved?.locationMode || 'auto';
+      const srMode = saved?.sunriseMode || 'auto';
+
+      // Manual sunrise time — user set it explicitly; don't recalc.
+      if (srMode !== 'auto') return;
+
+      if (refreshLocation && mode === 'auto') {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        const latN = loc.coords.latitude;
+        const lngN = loc.coords.longitude;
+        const rawAlt = loc.coords.altitude;
+        const altN = (typeof rawAlt === 'number' && !isNaN(rawAlt) && rawAlt > 0 && rawAlt < 5000) ? rawAlt : 0;
+        console.log(`[GPS] Lat: ${latN}, Lon: ${lngN}, Raw alt: ${rawAlt}, Clamped alt: ${altN}m`);
+        let cityName = 'Current Location';
+        try {
+          const geo = await Location.reverseGeocodeAsync({ latitude: latN, longitude: lngN });
+          if (geo && geo.length > 0) {
+            cityName = geo[0].city || geo[0].district || geo[0].region || 'Current Location';
+          }
+        } catch(e) {}
+        const calc = calcSunrise(latN, lngN, altN);
+        console.log(`[Sunrise] Refresh with GPS — Str: ${calc.sunriseStr}, Alt: ${altN}m`);
+        setConfig(prev => {
+          const next = { ...prev,
+            city: cityName, lat: latN, lng: lngN, locationMode: 'auto',
+            sunriseMin: calc.sunriseMin, sunsetMin: calc.sunsetMin,
+            sunriseStr: calc.sunriseStr, sunsetStr: calc.sunsetStr,
+          };
+          try { AsyncStorage.setItem('appConfig', JSON.stringify(next)); } catch(e) {}
+          return next;
+        });
+      } else {
+        // Just recalc sunrise from persisted coords — for daily rollover on
+        // fixed 'gps-once' or 'manual' location without a GPS refresh.
+        const lat = saved.lat, lng = saved.lng;
+        if (typeof lat !== 'number' || typeof lng !== 'number') return;
+        const alt = (typeof saved.alt === 'number' && saved.alt >= 0 && saved.alt < 5000) ? saved.alt : 0;
+        const calc = calcSunrise(lat, lng, alt);
+        console.log(`[Sunrise] Recalc without GPS — Str: ${calc.sunriseStr}`);
+        setConfig(prev => {
+          if (prev.sunriseStr === calc.sunriseStr && prev.sunsetStr === calc.sunsetStr) return prev;
+          const next = { ...prev,
+            sunriseMin: calc.sunriseMin, sunsetMin: calc.sunsetMin,
+            sunriseStr: calc.sunriseStr, sunsetStr: calc.sunsetStr,
+          };
+          try { AsyncStorage.setItem('appConfig', JSON.stringify(next)); } catch(e) {}
+          return next;
+        });
+      }
+    } catch(e) { console.log(`[Sunrise] refresh failed: ${e?.message || e}`); }
+  }, []);
+
+  // Load saved config on app start + first GPS refresh.
   useEffect(() => {
     (async () => {
       let saved = null;
@@ -253,63 +313,44 @@ function InnerApp() {
         const raw = await AsyncStorage.getItem('appConfig');
         if (raw) saved = JSON.parse(raw);
       } catch(e) {}
-
       if (saved && typeof saved === 'object') {
-        // Apply everything from saved config
         setConfig(prev => ({ ...prev, ...saved }));
         if (typeof saved.isGhatika === 'boolean') setIsGhatika(saved.isGhatika);
       }
-
-      const mode = saved?.locationMode || 'auto';
-      const srMode = saved?.sunriseMode || 'auto';
-
-      // If location mode is 'auto', refresh GPS in background
-      if (mode === 'auto') {
-        try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === 'granted') {
-            // Use High accuracy to get accurate latitude, longitude, AND altitude
-            // altitude (in meters) affects sunrise/sunset by ~0.3 min per 100m
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-            const latN = loc.coords.latitude;
-            const lngN = loc.coords.longitude;
-            // Sanitize altitude: SunCalc returns Invalid Date for negative values,
-            // and huge positive values (bad GPS fix) skew the calculation badly.
-            // Clamp to reasonable range [0, 5000m] which covers ~99.9% of inhabited
-            // locations (Everest base camp is 5364m).
-            const rawAlt = loc.coords.altitude;
-            const altN = (typeof rawAlt === 'number' && !isNaN(rawAlt) && rawAlt > 0 && rawAlt < 5000)
-              ? rawAlt
-              : 0;
-            console.log(`[GPS] Lat: ${latN}, Lon: ${lngN}, Raw alt: ${rawAlt}, Clamped alt: ${altN}m`);
-            let cityName = 'Current Location';
-            try {
-              const geo = await Location.reverseGeocodeAsync({ latitude: latN, longitude: lngN });
-              if (geo && geo.length > 0) {
-                cityName = geo[0].city || geo[0].district || geo[0].region || 'Current Location';
-              }
-            } catch(e) {}
-            setConfig(prev => {
-              const next = { ...prev, city: cityName, lat: latN, lng: lngN, locationMode: 'auto' };
-              // Only update sunrise/sunset if user wants auto-calculated times
-              if (srMode === 'auto') {
-                // Pass altitude so suncalc can account for elevation
-                const calc = calcSunrise(latN, lngN, altN);
-                console.log(`[Sunrise] Str: ${calc.sunriseStr}, Min: ${calc.sunriseMin}, Alt used: ${altN}m`);  // DEBUG
-                next.sunriseMin = calc.sunriseMin;
-                next.sunsetMin  = calc.sunsetMin;
-                next.sunriseStr = calc.sunriseStr;
-                next.sunsetStr  = calc.sunsetStr;
-              }
-              // Persist immediately so next restart sees fresh location
-              try { AsyncStorage.setItem('appConfig', JSON.stringify(next)); } catch(e) {}
-              return next;
-            });
-          }
-        } catch(e) {}
-      }
+      // Initial GPS refresh + sunrise recalc
+      await refreshLocationAndSunrise({ refreshLocation: true });
     })();
-  }, []);
+  }, [refreshLocationAndSunrise]);
+
+  // Auto-refresh sunrise when app comes back from background.
+  // This is what fixes the reported bug: user opens app in the morning after
+  // it sat in the background overnight → sunrise gets recalculated for TODAY
+  // without them having to touch Settings. Matches how weather apps behave.
+  useEffect(() => {
+    let lastRefresh = Date.now();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        // Debounce: don't refresh if it's been <60s since last refresh
+        // (prevents spam when user rapidly switches apps).
+        const now = Date.now();
+        if (now - lastRefresh < 60 * 1000) return;
+        lastRefresh = now;
+        console.log('[AppState] Resumed — refreshing sunrise');
+        refreshLocationAndSunrise({ refreshLocation: true });
+      }
+    });
+    return () => { try { sub.remove(); } catch(e) {} };
+  }, [refreshLocationAndSunrise]);
+
+  // Periodic recalc: every 30 minutes, recompute sunrise even without GPS.
+  // Covers the case where the app is left open all day and crosses midnight —
+  // by 00:30 the next day's sunrise is in place. Cheap (no GPS call).
+  useEffect(() => {
+    const id = setInterval(() => {
+      refreshLocationAndSunrise({ refreshLocation: false });
+    }, 30 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [refreshLocationAndSunrise]);
 
   // Persist isGhatika changes (separate from config in case user toggles only this)
   useEffect(() => {
