@@ -277,7 +277,7 @@ function InnerApp() {
         console.log(`[Sunrise] Refresh with GPS — Str: ${calc.sunriseStr}, Alt: ${altN}m`);
         setConfig(prev => {
           const next = { ...prev,
-            city: cityName, lat: latN, lng: lngN, locationMode: 'auto',
+            city: cityName, lat: latN, lng: lngN, alt: altN, locationMode: 'auto',
             sunriseMin: calc.sunriseMin, sunsetMin: calc.sunsetMin,
             sunriseStr: calc.sunriseStr, sunsetStr: calc.sunsetStr,
           };

@@ -87,9 +87,14 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
         Alert.alert('Permission denied','Please enable location for Svara Yoga in your phone settings.');
         return null;
       }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      // High accuracy so we also get altitude (Balanced doesn't guarantee it).
+      // Altitude feeds back into Apply so sunrise is calculated consistently
+      // whether the user Applies manually or App.js auto-refreshes.
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const latN = loc.coords.latitude;
       const lngN = loc.coords.longitude;
+      const rawAlt = loc.coords.altitude;
+      const altN = (typeof rawAlt === 'number' && !isNaN(rawAlt) && rawAlt > 0 && rawAlt < 5000) ? rawAlt : 0;
       let newCity = 'Current Location';
       try {
         const geo = await Location.reverseGeocodeAsync({ latitude: latN, longitude: lngN });
@@ -100,8 +105,11 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
       setLat(latN.toFixed(4));
       setLng(lngN.toFixed(4));
       setCity(newCity);
+      // Push altitude into config right away so Apply (and the Reset-to-
+      // calculated preview under Manual time) see the fresh value.
+      setConfig(prev => ({ ...prev, alt: altN }));
       setGpsLoad(false);
-      return { latN, lngN, newCity };
+      return { latN, lngN, altN, newCity };
     } catch(e) {
       setGpsLoad(false);
       Alert.alert('GPS Error', e.message||'Could not get location');
@@ -117,18 +125,22 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
     const lngN = parseFloat(lng) || config.lng;
     const cityName = city || 'Current Location';
 
+    // Preserve stored altitude so sunrise matches what the GPS-refresh branch
+    // in App.js calculates. Without this, Apply would re-compute at alt=0 and
+    // flip the time back by ~1 min, which was the reported bug.
+    const altN = (typeof config.alt === 'number' && config.alt >= 0 && config.alt < 5000) ? config.alt : 0;
     let sunriseMin, sunsetMin, sunriseStr, sunsetStr;
     if (useManualTime) {
       sunriseMin = parseInt(srH)*60+parseInt(srM);
       sunsetMin  = parseInt(ssH)*60+parseInt(ssM);
       sunriseStr = `${srH}:${srM}`; sunsetStr = `${ssH}:${ssM}`;
     } else {
-      const calc = calcSunrise(latN,lngN);
+      const calc = calcSunrise(latN,lngN,altN);
       sunriseMin=calc.sunriseMin; sunsetMin=calc.sunsetMin;
       sunriseStr=calc.sunriseStr; sunsetStr=calc.sunsetStr;
     }
     const newConfig = {
-      city:cityName, lat:latN, lng:lngN,
+      city:cityName, lat:latN, lng:lngN, alt:altN,
       srH:parseInt(srH), srM:parseInt(srM), ssH:parseInt(ssH), ssM:parseInt(ssM),
       sunriseMin, sunsetMin, sunriseStr, sunsetStr,
       locationMode: mode === 'auto' ? 'auto' : mode === 'gps-once' ? 'gps' : 'manual',
@@ -269,7 +281,8 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
               // When switching to Manual, prefill with current calculated values
               const latN = parseFloat(lat) || config.lat;
               const lngN = parseFloat(lng) || config.lng;
-              const calc = calcSunrise(latN, lngN);
+              const altN = (typeof config.alt === 'number' && config.alt >= 0 && config.alt < 5000) ? config.alt : 0;
+              const calc = calcSunrise(latN, lngN, altN);
               const [srHh, srMm] = calc.sunriseStr.split(':');
               const [ssHh, ssMm] = calc.sunsetStr.split(':');
               setSrH(srHh); setSrM(srMm);
@@ -307,7 +320,8 @@ export default function SettingsScreen({ config, setConfig, isGhatika, setIsGhat
                 <TouchableOpacity onPress={() => {
                   const latN = parseFloat(lat) || config.lat;
                   const lngN = parseFloat(lng) || config.lng;
-                  const calc = calcSunrise(latN, lngN);
+                  const altN = (typeof config.alt === 'number' && config.alt >= 0 && config.alt < 5000) ? config.alt : 0;
+                  const calc = calcSunrise(latN, lngN, altN);
                   const [srHh, srMm] = calc.sunriseStr.split(':');
                   const [ssHh, ssMm] = calc.sunsetStr.split(':');
                   setSrH(srHh); setSrM(srMm);
