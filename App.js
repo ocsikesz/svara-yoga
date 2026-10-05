@@ -257,15 +257,23 @@ function InnerApp() {
       // Manual sunrise time — user set it explicitly; don't recalc.
       if (srMode !== 'auto') return;
 
+      // Industry-standard sunrise calculation uses sea level (altitude 0).
+      // Weather apps, Garmin, and traditional yoga calendars all converge on
+      // this convention, so Svara Yoga matches them for consistency. The
+      // altitude-aware calculation (physically more accurate but ~3-4 min
+      // earlier at 320m) was removed after real-world comparison showed it
+      // diverged from every other sunrise source the user cross-checked.
+      const SUNRISE_ALT = 0;
+
       if (refreshLocation && mode === 'auto') {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        // Balanced accuracy is enough — we don't need altitude anymore and
+        // Balanced is faster + lower battery than High.
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         const latN = loc.coords.latitude;
         const lngN = loc.coords.longitude;
-        const rawAlt = loc.coords.altitude;
-        const altN = (typeof rawAlt === 'number' && !isNaN(rawAlt) && rawAlt > 0 && rawAlt < 5000) ? rawAlt : 0;
-        console.log(`[GPS] Lat: ${latN}, Lon: ${lngN}, Raw alt: ${rawAlt}, Clamped alt: ${altN}m`);
+        console.log(`[GPS] Lat: ${latN}, Lon: ${lngN}`);
         let cityName = 'Current Location';
         try {
           const geo = await Location.reverseGeocodeAsync({ latitude: latN, longitude: lngN });
@@ -273,14 +281,17 @@ function InnerApp() {
             cityName = geo[0].city || geo[0].district || geo[0].region || 'Current Location';
           }
         } catch(e) {}
-        const calc = calcSunrise(latN, lngN, altN);
-        console.log(`[Sunrise] Refresh with GPS — Str: ${calc.sunriseStr}, Alt: ${altN}m`);
+        const calc = calcSunrise(latN, lngN, SUNRISE_ALT);
+        console.log(`[Sunrise] Refresh with GPS — Str: ${calc.sunriseStr} (sea level)`);
         setConfig(prev => {
           const next = { ...prev,
-            city: cityName, lat: latN, lng: lngN, alt: altN, locationMode: 'auto',
+            city: cityName, lat: latN, lng: lngN, locationMode: 'auto',
             sunriseMin: calc.sunriseMin, sunsetMin: calc.sunsetMin,
             sunriseStr: calc.sunriseStr, sunsetStr: calc.sunsetStr,
           };
+          // Strip any previously-persisted alt — it's no longer used and we
+          // don't want it hanging around in AsyncStorage.
+          if ('alt' in next) delete next.alt;
           try { AsyncStorage.setItem('appConfig', JSON.stringify(next)); } catch(e) {}
           return next;
         });
@@ -289,15 +300,15 @@ function InnerApp() {
         // fixed 'gps-once' or 'manual' location without a GPS refresh.
         const lat = saved.lat, lng = saved.lng;
         if (typeof lat !== 'number' || typeof lng !== 'number') return;
-        const alt = (typeof saved.alt === 'number' && saved.alt >= 0 && saved.alt < 5000) ? saved.alt : 0;
-        const calc = calcSunrise(lat, lng, alt);
-        console.log(`[Sunrise] Recalc without GPS — Str: ${calc.sunriseStr}`);
+        const calc = calcSunrise(lat, lng, SUNRISE_ALT);
+        console.log(`[Sunrise] Recalc without GPS — Str: ${calc.sunriseStr} (sea level)`);
         setConfig(prev => {
           if (prev.sunriseStr === calc.sunriseStr && prev.sunsetStr === calc.sunsetStr) return prev;
           const next = { ...prev,
             sunriseMin: calc.sunriseMin, sunsetMin: calc.sunsetMin,
             sunriseStr: calc.sunriseStr, sunsetStr: calc.sunsetStr,
           };
+          if ('alt' in next) delete next.alt;
           try { AsyncStorage.setItem('appConfig', JSON.stringify(next)); } catch(e) {}
           return next;
         });
