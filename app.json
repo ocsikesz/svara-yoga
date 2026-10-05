@@ -58,7 +58,27 @@
           }
         }
       ],
-      "react-native-iap"
+      "react-native-iap",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "SvaraWidget",
+              "label": "Svara Yoga — Active Nadi & Tattva",
+              "description": "Shows your current nadi, tattva and sunrise on the home screen",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetCategory": "home_screen",
+              "previewImage": "./assets/icon.png"
+            }
+          ]
+        }
+      ]
     ],
     "extra": {
       "eas": {
