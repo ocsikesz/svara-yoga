@@ -24,7 +24,7 @@ jobs:
         id: version
         run: |
           VERSION_BASE=$(node -p "require('./app.json').expo.version")
-          BUILD_NUMBER=$(( $(git rev-list --count HEAD) + 200 ))
+          BUILD_NUMBER=$(( $(git rev-list --count HEAD) + 500 ))
           VERSION_NAME="${VERSION_BASE}-b${BUILD_NUMBER}"
           echo "build=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "full=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
